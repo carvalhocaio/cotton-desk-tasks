@@ -1,12 +1,26 @@
 from dataclasses import dataclass
 
 
-class MicronaireForaDaFaixa(Exception):
-    """Levantada quando o micronaire de um laudo HVI está fora da faiza comercializável."""
+class ParametroHVIInvalido(Exception):
+    """Base para qualquer parâmetro de laudo HVI fora da faixa comercializável."""
+
+
+class MicronaireForaDaFaixa(ParametroHVIInvalido):
+    """Levantada quando o micronaire está fora da faixa comercializável."""
+
+
+class ComprimentoAbaixoDoMinimo(ParametroHVIInvalido):
+    """Levantada quando o comprimento de fibra está abaixo do mínimo comercial."""
+
+
+class ResistenciaAbaixoDoMinimo(ParametroHVIInvalido):
+    """Levantada quando a resistência de fibra está abaixo do mínimo comercial."""
 
 
 MICRONAIRE_MIN = 3.5
 MICRONAIRE_MAX = 4.9
+COMPRIMENTO_MIN = 1.11  # polegadas (UHML)
+RESISTENCIA_MIN = 28.0  # gf/tex
 
 
 @dataclass(frozen=True)
@@ -23,10 +37,26 @@ class HVIParametros:
 
     def __post_init__(self) -> None:
         self._validar_micronaire()
+        self._validar_comprimento()
+        self._validar_resistencia()
 
     def _validar_micronaire(self) -> None:
         if not (MICRONAIRE_MIN <= self.micronaire <= MICRONAIRE_MAX):
             raise MicronaireForaDaFaixa(
-                f"micronaire {self.micronaire} fora da caixa "
+                f"micronaire {self.micronaire} fora da faixa "
                 f"[{MICRONAIRE_MIN}, {MICRONAIRE_MAX}]"
+            )
+
+    def _validar_comprimento(self) -> None:
+        if self.comprimento < COMPRIMENTO_MIN:
+            raise ComprimentoAbaixoDoMinimo(
+                f"comprimento {self.comprimento}\" abaixo do mínimo comercial "
+                f"{COMPRIMENTO_MIN}\""
+            )
+
+    def _validar_resistencia(self) -> None:
+        if self.resistencia < RESISTENCIA_MIN:
+            raise ResistenciaAbaixoDoMinimo(
+                f"resistência {self.resistencia} gf/tex abaixo do mínimo comercial "
+                f"{RESISTENCIA_MIN} gf/tex"
             )
