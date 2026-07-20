@@ -1,7 +1,7 @@
 from django.tasks import task
 
 from desk.domain import ParametroHVIInvalido
-from desk.models import LaudoHVI
+from desk.models import Contrato, LaudoHVI
 
 
 @task(queue_name="laudos", priority=50)
@@ -31,3 +31,13 @@ def gerar_relatorio_safra(safra: str) -> str:
         except ParametroHVIInvalido:
             invalidos += 1
     return f"Safra {safra}: {total} laudos, {validos} válido(s), {invalidos} inválido(s)"
+
+
+@task(queue_name="confirmacoes", priority=50)
+def confirmar_contrato(contrato_id: int) -> str:
+    """Gera a confirmação textual de um contrato recém-fechado."""
+    contrato = Contrato.objects.select_related("fardo").get(pk=contrato_id)
+    return (
+        f"Contrato do fardo {contrato.fardo.codigo} confirmado com "
+        f"{contrato.comprador} a R$ {contrato.preco_por_kg}/kg"
+    )
