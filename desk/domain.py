@@ -17,10 +17,15 @@ class ResistenciaAbaixoDoMinimo(ParametroHVIInvalido):
     """Levantada quando a resistência de fibra está abaixo do mínimo comercial."""
 
 
+class UniformidadeAbaixoDoMinimo(ParametroHVIInvalido):
+    """Levantada quando a uniformidade está abaixo do mínimo comercial."""
+
+
 MICRONAIRE_MIN = 3.5
 MICRONAIRE_MAX = 4.9
 COMPRIMENTO_MIN = 1.11  # polegadas (UHML)
 RESISTENCIA_MIN = 28.0  # gf/tex
+UNIFORMIDADE_MIN = 80.0  # %
 
 
 @dataclass(frozen=True)
@@ -39,6 +44,7 @@ class HVIParametros:
         self._validar_micronaire()
         self._validar_comprimento()
         self._validar_resistencia()
+        self._validar_uniformidade()
 
     def _validar_micronaire(self) -> None:
         if not (MICRONAIRE_MIN <= self.micronaire <= MICRONAIRE_MAX):
@@ -59,4 +65,11 @@ class HVIParametros:
             raise ResistenciaAbaixoDoMinimo(
                 f"resistência {self.resistencia} gf/tex abaixo do mínimo comercial "
                 f"{RESISTENCIA_MIN} gf/tex"
+            )
+
+    def _validar_uniformidade(self) -> None:
+        if self.uniformidade < UNIFORMIDADE_MIN:
+            raise UniformidadeAbaixoDoMinimo(
+                f"uniformidade {self.uniformidade}% abaixo do mínimo comercial "
+                f"{UNIFORMIDADE_MIN}%"
             )

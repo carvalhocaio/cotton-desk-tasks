@@ -5,6 +5,7 @@ from desk.domain import (
     HVIParametros,
     MicronaireForaDaFaixa,
     ResistenciaAbaixoDoMinimo,
+    UniformidadeAbaixoDoMinimo,
 )
 
 
@@ -41,3 +42,13 @@ def test_hvi_com_resistencia_no_minimo_comercial_e_valida():
 def test_hvi_com_resistencia_abaixo_do_minimo_comercial_levanta_erro():
     with pytest.raises(ResistenciaAbaixoDoMinimo):
         HVIParametros(micronaire=4.2, comprimento=1.16, resistencia=24.0, uniformidade=82.0)
+
+
+def test_hvi_com_uniformidade_no_minimo_comercial_e_valida():
+    hvi = HVIParametros(micronaire=4.2, comprimento=1.16, resistencia=29.0, uniformidade=80.0)
+    assert hvi.uniformidade == 80.0
+
+
+def test_hvi_com_uniformidade_abaixo_do_minimo_comercial_levanta_erro():
+    with pytest.raises(UniformidadeAbaixoDoMinimo):
+        HVIParametros(micronaire=4.2, comprimento=1.16, resistencia=29.0, uniformidade=76.0)
