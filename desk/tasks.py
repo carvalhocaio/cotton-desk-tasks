@@ -1,7 +1,9 @@
+from decimal import Decimal
+
 from django.tasks import task
 
 from desk.domain import ParametroHVIInvalido
-from desk.models import Contrato, LaudoHVI
+from desk.models import Contrato, IndicePreco, LaudoHVI
 
 
 @task(queue_name="laudos", priority=50)
@@ -41,3 +43,20 @@ def confirmar_contrato(contrato_id: int) -> str:
         f"Contrato do fardo {contrato.fardo.codigo} confirmado com "
         f"{contrato.comprador} a R$ {contrato.preco_por_kg}/kg"
     )
+
+
+@task(queue_name="precos", priority=0)
+def registrar_leitura_indice(codigo: str, valor: str, data_pregao: str) -> str:
+    """Persiste uma leitura de índice de preço.
+
+    `valor` chega como string, não Decimal: argumentos de task passam por
+    serialização JSON no `.enqueue()`, e Decimal não sobrevive a esse
+    round-trip; quem chama essa task precisa converter antes.
+    """
+    leitura, _criada = IndicePreco.objects.update_or_create(
+        codigo=codigo,
+        data_pregao=data_pregao,
+        defaults={"valor": Decimal(valor)},
+    )
+
+    return f"{leitura.codigo} em {leitura.data_pregao}: R$ {leitura.valor}"
