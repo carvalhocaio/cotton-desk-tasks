@@ -4,28 +4,14 @@ import pytest
 from django.tasks import TaskResultStatus
 from django.urls import reverse
 
-from desk.models import Fardo, LaudoHVI
-
-
-@pytest.fixture
-def fardo():
-    return Fardo.objects.create(
-        codigo="BR2026000500",
-        safra="2025/2026",
-        produtor="Fazenda Bom Futuro",
-        peso_kg="217.00",
-        data_classificacao="2026-03-22",
-    )
+from desk.models import LaudoHVI
 
 
 @pytest.mark.django_db
 def test_post_resumir_laudo_enfileira_e_retorna_task_id(client, fardo):
     laudo = LaudoHVI.objects.create(
-        fardo=fardo,
-        micronaire="4.20",
-        comprimento="1.16",
-        resistencia="29.0",
-        uniformidade="82.0",
+        fardo=fardo, micronaire="4.20", comprimento="1.16",
+        resistencia="29.0", uniformidade="82.0",
     )
 
     resposta = client.post(reverse("resumir_laudo", args=[laudo.id]))

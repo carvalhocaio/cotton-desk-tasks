@@ -1,8 +1,13 @@
+from functools import partial
+
+from django.db import transaction
 from django.http import JsonResponse
 from django.tasks import TaskResultStatus, default_task_backend
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
+from desk.models import Contrato, Fardo
+from desk.tasks import confirmar_contrato
 from desk.tasks import resumir_laudo as tarefa_resumir_laudo
 
 
@@ -28,3 +33,18 @@ def status_da_task(request, task_id):
         return JsonResponse({"status": "falhou", "erro": erro}, status=422)
 
     return JsonResponse({"status": "pendente"})
+
+
+@csrf_exempt
+@require_POST
+def checkout(request):
+    """Fecha um contatro e agenda a confirmação para depois do commit."""
+    fardo = Fardo.objects.get(pk=request.POST["fardo_id"])
+    with transaction.atomic():
+        contrato = Contrato.objects.create(
+            fardo=fardo,
+            comprador=request.POST["comprador"],
+            preco_por_kg=request.POST["preco_por_kg"],
+        )
+        transaction.on_commit(partial(confirmar_contrato.enqueue, contrato.id))
+    return JsonResponse({"contrato_id": contrato.id}, status=201)

@@ -1,6 +1,8 @@
 import pytest
 from django.test import override_settings
 
+from desk.models import Fardo
+
 
 @pytest.fixture(autouse=True)
 def task_immediate_backend():
@@ -20,3 +22,14 @@ def task_immediate_backend():
         }
     ):
         yield
+
+
+@pytest.fixture
+def fardo():
+    return Fardo.objects.create(
+        codigo="BR2026000500",
+        safra="2025/2026",
+        produtor="Fazenda Bom Futuro",
+        peso_kg="217.00",
+        data_classificacao="2026-03-22"
+    )
