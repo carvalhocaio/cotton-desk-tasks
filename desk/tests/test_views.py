@@ -1,4 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
+from django.tasks import TaskResultStatus
 from django.urls import reverse
 
 from desk.models import Fardo, LaudoHVI
@@ -13,6 +16,7 @@ def fardo():
         peso_kg="217.00",
         data_classificacao="2026-03-22",
     )
+
 
 @pytest.mark.django_db
 def test_post_resumir_laudo_enfileira_e_retorna_task_id(client, fardo):
@@ -30,37 +34,24 @@ def test_post_resumir_laudo_enfileira_e_retorna_task_id(client, fardo):
     assert "task_id" in resposta.json()
 
 
-@pytest.mark.django_db
-def test_get_status_da_task_concluida_retorna_resumo(client, fardo):
-    laudo = LaudoHVI.objects.create(
-        fardo=fardo,
-        micronaire="4.20",
-        comprimento="1.16",
-        resistencia="29.0",
-        uniformidade="82.0",
-    )
-    task_id = client.post(reverse("resumir_laudo", args=[laudo.id])).json()["task_id"]
+def test_get_status_da_task_concluida_retorna_resumo(client):
+    resumo = 'Fardo BR2026000500: micronaire 4.2, comprimento 1.16", resistência 29.0 gf/tex, uniformidade 82.0%'
+    resultado_fake = MagicMock(status=TaskResultStatus.SUCCESSFUL, return_value=resumo)
 
-    resposta = client.get(reverse("status_da_task", args=[task_id]))
+    with patch("desk.views.default_task_backend.get_result", return_value=resultado_fake):
+        resposta = client.get(reverse("status_da_task", args=["qualquer-id"]))
     corpo = resposta.json()
 
     assert resposta.status_code == 200
-    assert corpo["status"] == "concluida"
-    assert "BR2026000500" in corpo["resultado"]
+    assert corpo == {"status": "concluida", "resultado": resumo}
 
 
-@pytest.mark.django_db
-def test_get_status_da_task_com_laudo_invalido_retorna_falhou(client, fardo):
-    laudo = LaudoHVI.objects.create(
-        fardo=fardo,
-        micronaire="2.00",
-        comprimento="1.16",
-        resistencia="29.0",
-        uniformidade="82.0",
-    )
-    task_id = client.post(reverse("status_da_task", args=[laudo.id])).json()["task_id"]
+def test_get_status_da_task_com_laudo_invalido_retorna_falhou(client):
+    erro_fake = MagicMock(exception_class_path="desk.domain.MicronaireForaDaFaixa")
+    resultado_fake = MagicMock(status=TaskResultStatus.FAILED, errors=[erro_fake])
 
-    resposta = client.get(reverse("status_da_task", args=[task_id]))
+    with patch("desk.views.default_task_backend.get_result", return_value=resultado_fake):
+        resposta = client.get(reverse("status_da_task", args=["qualquer-id"]))
     corpo = resposta.json()
 
     assert resposta.status_code == 422

@@ -1,10 +1,12 @@
 from django.http import JsonResponse
 from django.tasks import TaskResultStatus, default_task_backend
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from desk.tasks import resumir_laudo as tarefa_resumir_laudo
 
 
+@csrf_exempt
 @require_POST
 def resumir_laudo(request, laudo_id):
     """Enfileira o resumo de um laudo HVI e devolve o id da task."""
