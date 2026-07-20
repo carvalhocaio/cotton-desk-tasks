@@ -42,3 +42,15 @@ class LaudoHVI(models.Model):
 
     def __str__(self) -> str:
         return f"Laudo HVI do fardo {self.fardo.codigo}"
+
+
+class Contrato(models.Model):
+    """Contrato de venda de um fardo para um comprador."""
+
+    fardo = models.ForeignKey(Fardo, on_delete=models.CASCADE, related_name="contratos")
+    comprador = models.CharField(max_length=120)
+    preco_por_kg = models.DecimalField(max_digits=6, decimal_places=2)
+    data_fechamento = models.DateField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"Contrato do fardo {self.fardo.codigo} com {self.comprador}"
