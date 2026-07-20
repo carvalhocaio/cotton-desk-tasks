@@ -1,5 +1,7 @@
 from django.db import models
 
+from desk.domain import HVIParametros
+
 
 class Fardo(models.Model):
     """Um fardo físico de algodão, identificado e rastreável desde o beneficiamento."""
@@ -12,3 +14,31 @@ class Fardo(models.Model):
 
     def __str__(self) -> str:
         return f"Fardo {self.codigo} ({self.safra})"
+
+
+class LaudoHVI(models.Model):
+    """Laudo de classificação HVI emitido pelo laboratório para um fardo.
+
+    O laudo é salvo como o laboratório o emitiu, mesmo que os valores
+    estejam fora da faixa comercial — a validação de negócio só acontece
+    ao converter para `HVIParametros` via `to_dominio()`.
+    """
+
+    fardo = models.ForeignKey(Fardo, on_delete=models.CASCADE, related_name="laudos")
+    micronaire = models.DecimalField(max_digits=3, decimal_places=2)
+    comprimento = models.DecimalField(max_digits=4, decimal_places=2)
+    resistencia = models.DecimalField(max_digits=4, decimal_places=1)
+    uniformidade = models.DecimalField(max_digits=4, decimal_places=1)
+    data_emissao = models.DateField(auto_now_add=True)
+
+    def to_dominio(self) -> HVIParametros:
+        """Converte os campos brutos do banco no value object de domínio validado."""
+        return HVIParametros(
+            micronaire=float(self.micronaire),
+            comprimento=float(self.comprimento),
+            resistencia=float(self.resistencia),
+            uniformidade=float(self.uniformidade),
+        )
+
+    def __str__(self) -> str:
+        return f"Laudo HVI do fardo {self.fardo.codigo}"
