@@ -17,7 +17,7 @@ def task_immediate_backend():
         TASKS={
             "default": {
                 "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
-                "QUEUES": ["laudos", "relatorios", "confirmacoes"],
+                "QUEUES": ["laudos", "relatorios", "confirmacoes", "precos"],
             }
         }
     ):

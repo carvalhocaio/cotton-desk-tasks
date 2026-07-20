@@ -54,3 +54,17 @@ class Contrato(models.Model):
 
     def __str__(self) -> str:
         return f"Contrato do fardo {self.fardo.codigo} com {self.comprador}"
+
+
+class IndicePreco(models.Model):
+    """Leitura diária de um índice de preço de referência do algodão."""
+
+    codigo = models.CharField(max_length=20) # ex.: "ICE-CT2", "CEPEA-8DIAS"
+    valor = models.DecimalField(max_digits=8, decimal_places=2)
+    data_pregao = models.DateField()
+
+    class Meta:
+        unique_together = ("codigo", "data_pregao")
+
+    def __str__(self) -> str:
+        return f"{self.codigo} em {self.data_pregao}: {self.valor}"
