@@ -13,7 +13,10 @@ def task_immediate_backend():
     """
     with override_settings(
         TASKS={
-            "default": {"BACKEND": "django.tasks.backends.immediate.ImmediateBackend"}
+            "default": {
+                "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
+                "QUEUES": ["laudos", "relatorios"],
+            }
         }
     ):
         yield
