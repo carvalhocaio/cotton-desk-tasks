@@ -39,7 +39,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 ]
 
-INSTALLED_APPS += ["desk"]
+INSTALLED_APPS += [
+    "desk",
+    "django_tasks_db",
+]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -120,6 +123,7 @@ STATIC_URL = "static/"
 
 TASKS = {
     "default": {
-        "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
-    }
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+        "QUEUES": ["default"],
+    },
 }
