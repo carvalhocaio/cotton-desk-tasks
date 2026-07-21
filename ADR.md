@@ -4,7 +4,7 @@
 Aceito - para fins de aprendizado. Ver seção "Gatilho para revisão" antes de usar em produção.
 
 ## Contexto
-O `cotton-desk-tasks` precisava de precisava de processamento assíncrono para três tipos de
+O `cotton-desk-tasks` precisava de processamento assíncrono para três tipos de
 trabalho: resumo de laudos (latência importa), relatórios de safra
 (agregação, pode esperar) e confirmação de contratos (precisa esperar o
 commit da transação). As opções consideradas foram o Task Framework nativo
