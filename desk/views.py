@@ -1,12 +1,12 @@
-from functools import partial
+import csv
+import io
 
-from django.db import transaction
 from django.http import JsonResponse
 from django.tasks import TaskResultStatus, default_task_backend
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from desk.models import Contrato, Fardo
+from desk.models import Contrato, Fardo, LaudoHVI
 from desk.tasks import confirmar_contrato
 from desk.tasks import resumir_laudo as tarefa_resumir_laudo
 
@@ -38,7 +38,7 @@ def status_da_task(request, task_id):
 @csrf_exempt
 @require_POST
 def checkout(request):
-    """Fecha um contatro e agenda a confirmação para depois do commit."""
+    """Fecha um contrato e agenda a confirmação para depois do commit."""
     fardo = Fardo.objects.get(pk=request.POST["fardo_id"])
     with transaction.atomic():
         contrato = Contrato.objects.create(
@@ -48,3 +48,41 @@ def checkout(request):
         )
         transaction.on_commit(partial(confirmar_contrato.enqueue, contrato.id))
     return JsonResponse({"contrato_id": contrato.id}, status=201)
+
+
+@csrf_exempt
+@require_POST
+def upload_lote_laudos(request):
+    """Recebe um CSV de laudos HVI, persiste cada linha e enfileira o resumo.
+
+    Atalho de demonstração: usa `get_or_create` por código de fardo para que
+    o mesmo CSV possa ser reenviado em testes manuais sem estourar por
+    unicidade - não é a regra real de deduplicação de fardo."""
+    arquivo = request.FILES["arquivo"]
+    texto = io.TextIOWrapper(arquivo.file, encoding="utf-8")
+    leitor = csv.DictReader(texto)
+
+    task_ids = []
+    criados = 0
+    for linha in leitor:
+        fardo, _fardo_criado = Fardo.objects.get_or_create(
+            codigo=linha["codigo"],
+            defaults={
+                "safra": linha["safra"],
+                "produtor": linha["produtor"],
+                "peso_kg": linha["peso_kg"],
+                "data_classificacao": linha["data_classificacao"],
+            },
+        )
+        laudo = LaudoHVI.objects.create(
+            fardo=fardo,
+            micronaire=linha["micronaire"],
+            comprimento=linha["comprimento"],
+            resistencia=linha["resistencia"],
+            uniformidade=linha["uniformidade"],
+        )
+        resultado = tarefa_resumir_laudo.enqueue(laudo.id)
+        task_ids.append(str(resultado.id))
+        criados += 1
+
+    return JsonResponse({"criados": criados, "task_ids": task_ids}, status=202)
