@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,8 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind = { config: {
+    tailwind.config = {
       theme: {
         extend: {
           colors: {
@@ -28,9 +31,8 @@
           },
         },
       },
-    }};
+    };
   </script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @media (prefers-reduced-motion: reduce) {
       .card { transition: none !important; }
