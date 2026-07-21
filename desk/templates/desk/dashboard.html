@@ -1,7 +1,5 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<!DOCTYPE html>
-<html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -72,6 +70,10 @@
         <button type="button" id="btn-exemplo"
           class="text-sm font-mono underline decoration-dotted text-denim/70 hover:text-denim focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta rounded-sm">
           baixar CSV de exemplo
+        </button>
+        <button type="button" id="btn-limpar"
+          class="text-sm font-mono border border-rust-900/30 text-rust-900 px-3 py-1.5 rounded-sm hover:bg-rust-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust-900 ml-auto">
+          limpar histórico
         </button>
       </form>
       <p id="msg-upload" class="mt-3 text-sm font-mono min-h-[1.25rem]"></p>
@@ -153,10 +155,13 @@
 
       for (const fila of FILAS) {
         const track = tracksEl[fila.nome];
-        const vazio = track.querySelector(".vazio");
         const tasksDaFila = dados.tasks.filter((t) => t.fila === fila.nome);
+        const idsAtuais = new Set(tasksDaFila.map((t) => t.id));
 
-        if (tasksDaFila.length && vazio) vazio.remove();
+        // remove cartões que não existem mais (ex.: histórico foi limpo)
+        track.querySelectorAll("[data-task-id]").forEach((cartao) => {
+          if (!idsAtuais.has(cartao.dataset.taskId)) cartao.remove();
+        });
 
         for (const t of tasksDaFila) {
           const existente = track.querySelector(`[data-task-id="${t.id}"]`);
@@ -169,6 +174,17 @@
               cartao.classList.remove("opacity-0", "-translate-x-2");
             });
           }
+        }
+
+        const vazioAtual = track.querySelector(".vazio");
+        const temCartoes = track.querySelector("[data-task-id]") !== null;
+        if (!temCartoes && !vazioAtual) {
+          const p = document.createElement("p");
+          p.className = "vazio font-mono text-xs text-ink/30";
+          p.textContent = "nenhuma task ainda";
+          track.appendChild(p);
+        } else if (temCartoes && vazioAtual) {
+          vazioAtual.remove();
         }
       }
     }
@@ -200,14 +216,25 @@
 
     document.getElementById("btn-exemplo").addEventListener("click", () => {
       const csv = "codigo,safra,produtor,peso_kg,data_classificacao,micronaire,comprimento,resistencia,uniformidade\n"
-        + "BR2026002000,2025/2026,Fazenda Bom Futuro,219.50,2026-04-25,4.20,1.16,29.0,82.0\n"
-        + "BR2026002001,2025/2026,Fazenda Bom Futuro,220.10,2026-04-25,2.10,1.05,24.0,76.0\n";
+        + "BR2026003000,2025/2026,Fazenda Bom Futuro,219.50,2026-04-28,4.20,1.16,29.0,82.0\n"
+        + "BR2026003001,2025/2026,Fazenda Bom Futuro,220.10,2026-04-28,4.00,1.18,30.5,84.0\n"
+        + "BR2026003002,2025/2026,Fazenda Bom Futuro,217.80,2026-04-28,2.80,1.16,29.0,82.0\n"
+        + "BR2026003003,2025/2026,Fazenda Bom Futuro,221.30,2026-04-28,5.60,1.16,29.0,82.0\n"
+        + "BR2026003004,2025/2026,Fazenda Bom Futuro,218.90,2026-04-28,4.20,1.02,29.0,82.0\n"
+        + "BR2026003005,2025/2026,Fazenda Bom Futuro,219.10,2026-04-28,4.20,1.16,24.0,82.0\n"
+        + "BR2026003006,2025/2026,Fazenda Bom Futuro,220.40,2026-04-28,4.20,1.16,29.0,74.0\n";
       const blob = new Blob([csv], { type: "text/csv" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = "laudos-exemplo.csv";
       link.click();
       URL.revokeObjectURL(link.href);
+    });
+
+    document.getElementById("btn-limpar").addEventListener("click", async () => {
+      if (!confirm("Apagar todo o histórico de tasks do painel?")) return;
+      await fetch("/dashboard/limpar/", { method: "POST" });
+      await atualizar();
     });
 
     montarEsteiras();
