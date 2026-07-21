@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.tasks import TaskResultStatus, default_task_backend
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
+from django_tasks_db.models import DBTaskResult
 
 from desk.models import Contrato, Fardo, LaudoHVI
 from desk.tasks import confirmar_contrato
@@ -28,9 +29,7 @@ def status_da_task(request, task_id):
     resultado.refresh()
 
     if resultado.status == TaskResultStatus.SUCCESSFUL:
-        return JsonResponse(
-            {"status": "concluida", "resultado": resultado.return_value}
-        )
+        return JsonResponse({"status": "concluida", "resultado": resultado.return_value})
 
     if resultado.status == TaskResultStatus.FAILED:
         erro = resultado.errors[0].exception_class_path
@@ -91,3 +90,22 @@ def upload_lote_laudos(request):
         criados += 1
 
     return JsonResponse({"criados": criados, "task_ids": task_ids}, status=202)
+
+
+@require_GET
+def tasks_json(request):
+    """Lista as tasks mais recentes por fila, para o dashboard consumir via polling."""
+    tasks = DBTaskResult.objects.order_by("-enqueued_at")[:50]
+    dados = [
+        {
+            "id": str(t.id),
+            "fila": t.queue_name,
+            "tarefa": t.task_path.rsplit(".", 1)[-1],
+            "status": t.status,
+            "enfileirada_em": t.enqueued_at.isoformat() if t.enqueued_at else None,
+            "iniciada_em": t.started_at.isoformat() if t.started_at else None,
+            "finalizada_em": t.finished_at.isoformat() if t.finished_at else None,
+        }
+        for t in tasks
+    ]
+    return JsonResponse({"tasks": dados})
