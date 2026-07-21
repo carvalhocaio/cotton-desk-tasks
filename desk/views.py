@@ -112,6 +112,14 @@ def tasks_json(request):
     return JsonResponse({"tasks": dados})
 
 
+@csrf_exempt
+@require_POST
+def limpar_tasks(request):
+    """Remove todo o histórico de tasks — atalho de demonstração para reiniciar o painel."""
+    removidas, _detalhes = DBTaskResult.objects.all().delete()
+    return JsonResponse({"removidas": removidas})
+
+
 def dashboard(request):
     """Renderiza o painel visual das filas — apresentação pura, sem lógica de negócio."""
     return render(request, "desk/dashboard.html")
