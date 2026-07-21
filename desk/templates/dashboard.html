@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel da Mesa — cotton-desk-tasks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind = { config: {
+      theme: {
+        extend: {
+          colors: {
+            kraft: '#F2ECDD',
+            paper: '#FBF8F0',
+            ink: '#2A2420',
+            denim: '#2E3A59',
+            terracotta: '#B5502D',
+            amber: { 200: '#F0D9A8', 900: '#7A4E12' },
+            olive: { 200: '#D9E2C9', 900: '#3F5230' },
+            rust:  { 200: '#F2C9C2', 900: '#7A2318' },
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'sans-serif'],
+            body: ['"IBM Plex Sans"', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace'],
+          },
+        },
+      },
+    }};
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media (prefers-reduced-motion: reduce) {
+      .card { transition: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-kraft text-ink font-body">
+
+  <header class="border-b-2 border-denim/15 px-6 py-5 md:px-10">
+    <div class="flex items-start justify-between flex-wrap gap-3 max-w-6xl mx-auto">
+      <div>
+        <p class="font-mono text-xs uppercase tracking-widest text-denim/70">cotton-desk-tasks</p>
+        <h1 class="font-display text-2xl md:text-3xl font-bold">Painel da Mesa</h1>
+      </div>
+      <p class="text-sm text-ink/60 max-w-sm">
+        Cada esteira abaixo é uma fila do Django Tasks. Suba um lote de laudos
+        e acompanhe as etiquetas andarem — pronta, executando, concluída ou falhou.
+      </p>
+    </div>
+  </header>
+
+  <main class="px-6 py-8 md:px-10 space-y-8 max-w-6xl mx-auto">
+
+    <section class="bg-paper border border-denim/15 rounded-sm p-6 shadow-sm">
+      <h2 class="font-display text-lg font-semibold mb-1">Subir manifesto (CSV)</h2>
+      <p class="text-sm text-ink/60 mb-4">
+        Colunas esperadas:
+        <code class="font-mono text-xs bg-kraft px-1.5 py-0.5 rounded">codigo,safra,produtor,peso_kg,data_classificacao,micronaire,comprimento,resistencia,uniformidade</code>
+      </p>
+      <form id="form-upload" class="flex flex-wrap items-center gap-3">
+        <input type="file" name="arquivo" id="input-arquivo" accept=".csv" required
+          class="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-sm file:border-0 file:bg-denim file:text-paper file:font-medium file:cursor-pointer hover:file:bg-denim/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta rounded-sm">
+        <button type="submit"
+          class="bg-terracotta text-paper font-display font-semibold px-5 py-2 rounded-sm hover:bg-terracotta/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-denim transition-colors">
+          Enfileirar lote
+        </button>
+        <button type="button" id="btn-exemplo"
+          class="text-sm font-mono underline decoration-dotted text-denim/70 hover:text-denim focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta rounded-sm">
+          baixar CSV de exemplo
+        </button>
+      </form>
+      <p id="msg-upload" class="mt-3 text-sm font-mono min-h-[1.25rem]"></p>
+    </section>
+
+    <section id="esteiras" class="space-y-6"></section>
+
+  </main>
+
+  <script>
+    const FILAS = [
+      { nome: "laudos", rotulo: "Laudos HVI", descricao: "resumo do laudo · prioridade alta" },
+      { nome: "confirmacoes", rotulo: "Confirmações de Contrato", descricao: "fechamento e extração via IA" },
+      { nome: "relatorios", rotulo: "Relatórios de Safra", descricao: "agregação · prioridade baixa" },
+      { nome: "precos", rotulo: "Índices de Preço", descricao: "ingestão diária" },
+    ];
+
+    const STATUS = {
+      READY:      { label: "pronta",     classes: "bg-amber-200 text-amber-900" },
+      RUNNING:    { label: "executando", classes: "bg-denim/20 text-denim animate-pulse" },
+      SUCCESSFUL: { label: "concluída",  classes: "bg-olive-200 text-olive-900" },
+      FAILED:     { label: "falhou",     classes: "bg-rust-200 text-rust-900" },
+    };
+
+    const tracksEl = {};
+
+    function montarEsteiras() {
+      const container = document.getElementById("esteiras");
+      for (const fila of FILAS) {
+        const secao = document.createElement("div");
+        secao.className = "bg-paper border border-denim/15 rounded-sm overflow-hidden";
+        secao.innerHTML = `
+          <div class="flex items-center justify-between px-4 py-2.5 border-b border-denim/10 bg-denim/5 flex-wrap gap-1">
+            <div class="flex items-baseline gap-2">
+              <h3 class="font-display font-semibold text-sm">${fila.rotulo}</h3>
+              <span class="font-mono text-[11px] text-ink/40">fila: ${fila.nome}</span>
+            </div>
+            <span class="text-[11px] text-ink/50">${fila.descricao}</span>
+          </div>
+          <div class="track flex gap-3 p-4 overflow-x-auto min-h-[92px] items-center" data-fila="${fila.nome}">
+            <p class="vazio font-mono text-xs text-ink/30">nenhuma task ainda</p>
+          </div>
+        `;
+        container.appendChild(secao);
+        tracksEl[fila.nome] = secao.querySelector(".track");
+      }
+    }
+
+    function cartaoTask(t) {
+      const info = STATUS[t.status] ?? { label: t.status, classes: "bg-ink/10 text-ink" };
+      const el = document.createElement("div");
+      el.className = "card shrink-0 w-52 rounded-sm border-2 border-dashed border-ink/15 bg-kraft px-3 py-2.5 opacity-0 -translate-x-2 transition-all duration-500";
+      el.dataset.taskId = t.id;
+      el.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span class="font-mono text-[11px] text-ink/50">#${t.id.slice(0, 8)}</span>
+          <span class="status-pill text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full ${info.classes}">${info.label}</span>
+        </div>
+        <p class="font-mono text-xs font-medium truncate" title="${t.tarefa}">${t.tarefa}</p>
+      `;
+      return el;
+    }
+
+    function atualizarCartao(el, t) {
+      const info = STATUS[t.status] ?? { label: t.status, classes: "bg-ink/10 text-ink" };
+      const pill = el.querySelector(".status-pill");
+      pill.className = `status-pill text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full ${info.classes}`;
+      pill.textContent = info.label;
+    }
+
+    async function atualizar() {
+      let dados;
+      try {
+        const resposta = await fetch("/dashboard/tasks.json");
+        dados = await resposta.json();
+      } catch (erro) {
+        return; // silencioso — tenta de novo no próximo ciclo
+      }
+
+      for (const fila of FILAS) {
+        const track = tracksEl[fila.nome];
+        const vazio = track.querySelector(".vazio");
+        const tasksDaFila = dados.tasks.filter((t) => t.fila === fila.nome);
+
+        if (tasksDaFila.length && vazio) vazio.remove();
+
+        for (const t of tasksDaFila) {
+          const existente = track.querySelector(`[data-task-id="${t.id}"]`);
+          if (existente) {
+            atualizarCartao(existente, t);
+          } else {
+            const cartao = cartaoTask(t);
+            track.prepend(cartao);
+            requestAnimationFrame(() => {
+              cartao.classList.remove("opacity-0", "-translate-x-2");
+            });
+          }
+        }
+      }
+    }
+
+    document.getElementById("form-upload").addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const arquivo = document.getElementById("input-arquivo").files[0];
+      const msg = document.getElementById("msg-upload");
+      if (!arquivo) return;
+
+      const dadosForm = new FormData();
+      dadosForm.append("arquivo", arquivo);
+
+      msg.textContent = "enviando...";
+      msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-denim";
+
+      try {
+        const resposta = await fetch("/laudos/upload-lote/", { method: "POST", body: dadosForm });
+        const corpo = await resposta.json();
+        if (!resposta.ok) throw new Error("falha no upload");
+        msg.textContent = `${corpo.criados} laudo(s) enfileirado(s) — acompanhe a esteira "Laudos HVI" abaixo.`;
+        msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-olive-900";
+        await atualizar();
+      } catch (erro) {
+        msg.textContent = "não deu certo enviar o CSV — confira as colunas e tente de novo.";
+        msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-rust-900";
+      }
+    });
+
+    document.getElementById("btn-exemplo").addEventListener("click", () => {
+      const csv = "codigo,safra,produtor,peso_kg,data_classificacao,micronaire,comprimento,resistencia,uniformidade\n"
+        + "BR2026002000,2025/2026,Fazenda Bom Futuro,219.50,2026-04-25,4.20,1.16,29.0,82.0\n"
+        + "BR2026002001,2025/2026,Fazenda Bom Futuro,220.10,2026-04-25,2.10,1.05,24.0,76.0\n";
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "laudos-exemplo.csv";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+    montarEsteiras();
+    atualizar();
+    setInterval(atualizar, 1500);
+  </script>
+</body>
+</html>

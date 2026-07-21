@@ -4,6 +4,7 @@ from functools import partial
 
 from django.db import transaction
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.tasks import TaskResultStatus, default_task_backend
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
@@ -109,3 +110,8 @@ def tasks_json(request):
         for t in tasks
     ]
     return JsonResponse({"tasks": dados})
+
+
+def dashboard(request):
+    """Renderiza o painel visual das filas — apresentação pura, sem lógica de negócio."""
+    return render(request, "desk/dashboard.html")
