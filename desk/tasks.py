@@ -4,7 +4,7 @@ from django.tasks import task
 
 from desk.domain import ParametroHVIInvalido
 from desk.extracao import extrair_dados_confirmacao
-from desk.models import Contrato, IndicePreco, LaudoHVI
+from desk.models import Contrato, Fardo, IndicePreco, LaudoHVI
 
 
 @task(queue_name="laudos", priority=50)
@@ -52,22 +52,30 @@ def registrar_leitura_indice(codigo: str, valor: str, data_pregao: str) -> str:
 
     `valor` chega como string, não Decimal: argumentos de task passam por
     serialização JSON no `.enqueue()`, e Decimal não sobrevive a esse
-    round-trip; quem chama essa task precisa converter antes.
+    round-trip — quem chama essa task precisa converter antes.
     """
     leitura, _criada = IndicePreco.objects.update_or_create(
         codigo=codigo,
         data_pregao=data_pregao,
         defaults={"valor": Decimal(valor)},
     )
-
     return f"{leitura.codigo} em {leitura.data_pregao}: R$ {leitura.valor}"
 
 
 @task(queue_name="confirmacoes", priority=30)
 def extrair_confirmacao(texto: str) -> str:
-    """Extrai campos estruturados de um texto livre de confirmação de contrao."""
+    """Extrai dados de um texto livre, cria o Contrato e agenda a confirmação formal.
+
+    Se o fardo citado no texto não existir na base, a task falha com
+    `Fardo.DoesNotExist` — um LLM pode alucinar ou errar o código, e isso
+    deve aparecer como falha real, não ser engolido silenciosamente.
+    """
     dados = extrair_dados_confirmacao(texto)
-    return (
-        f"Extraído: fardo {dados.fardo_codigo}, comprador {dados.comprador}, "
-        f"preço R$ {dados.preco_por_kg}/kg"
+    fardo = Fardo.objects.get(codigo=dados.fardo_codigo)
+    contrato = Contrato.objects.create(
+        fardo=fardo,
+        comprador=dados.comprador,
+        preco_por_kg=Decimal(dados.preco_por_kg),
     )
+    confirmar_contrato.enqueue(contrato.id)
+    return f"Contrato {contrato.id} criado: fardo {fardo.codigo}, comprador {contrato.comprador}"
