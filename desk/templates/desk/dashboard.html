@@ -79,6 +79,33 @@
       <p id="msg-upload" class="mt-3 text-sm font-mono min-h-[1.25rem]"></p>
     </section>
 
+    <section class="bg-paper border border-denim/15 rounded-sm p-6 shadow-sm">
+      <h2 class="font-display text-lg font-semibold mb-1">Disparar outras filas</h2>
+      <p class="text-sm text-ink/60 mb-4">
+        Cada botão aciona uma task independente numa fila diferente — é assim que
+        o trabalho chega a cada esteira.
+      </p>
+      <div class="flex flex-wrap gap-3">
+        <button type="button" data-acao="/dashboard/relatorio-teste/"
+          class="btn-acao text-sm font-mono border border-denim/25 px-4 py-2 rounded-sm hover:bg-denim/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-denim">
+          gerar relatório de safra
+        </button>
+        <button type="button" data-acao="/dashboard/preco-teste/"
+          class="btn-acao text-sm font-mono border border-denim/25 px-4 py-2 rounded-sm hover:bg-denim/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-denim">
+          registrar preço (ICE-CT2)
+        </button>
+        <button type="button" data-acao="/dashboard/contrato-teste/"
+          class="btn-acao text-sm font-mono border border-denim/25 px-4 py-2 rounded-sm hover:bg-denim/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-denim">
+          fechar contrato (último fardo)
+        </button>
+        <button type="button" data-acao="/dashboard/demo-lenta/"
+          class="btn-acao text-sm font-mono border border-terracotta/40 text-terracotta px-4 py-2 rounded-sm hover:bg-terracotta/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta">
+          task lenta (4s) → ver "executando"
+        </button>
+      </div>
+      <p id="msg-acao" class="mt-3 text-sm font-mono min-h-[1.25rem]"></p>
+    </section>
+
     <section id="esteiras" class="space-y-6"></section>
 
   </main>
@@ -89,6 +116,7 @@
       { nome: "confirmacoes", rotulo: "Confirmações de Contrato", descricao: "fechamento e extração via IA" },
       { nome: "relatorios", rotulo: "Relatórios de Safra", descricao: "agregação · prioridade baixa" },
       { nome: "precos", rotulo: "Índices de Preço", descricao: "ingestão diária" },
+      { nome: "demo", rotulo: "Demonstração", descricao: "task artificialmente lenta · só para visualização" },
     ];
 
     const STATUS = {
@@ -158,7 +186,6 @@
         const tasksDaFila = dados.tasks.filter((t) => t.fila === fila.nome);
         const idsAtuais = new Set(tasksDaFila.map((t) => t.id));
 
-        // remove cartões que não existem mais (ex.: histórico foi limpo)
         track.querySelectorAll("[data-task-id]").forEach((cartao) => {
           if (!idsAtuais.has(cartao.dataset.taskId)) cartao.remove();
         });
@@ -212,6 +239,29 @@
         msg.textContent = "não deu certo enviar o CSV — confira as colunas e tente de novo.";
         msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-rust-900";
       }
+    });
+
+    document.querySelectorAll(".btn-acao").forEach((botao) => {
+      botao.addEventListener("click", async () => {
+        const msg = document.getElementById("msg-acao");
+        msg.textContent = "disparando...";
+        msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-denim";
+        try {
+          const resposta = await fetch(botao.dataset.acao, { method: "POST" });
+          const corpo = await resposta.json();
+          if (!resposta.ok) {
+            msg.textContent = corpo.erro ?? "não deu certo disparar essa ação.";
+            msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-rust-900";
+            return;
+          }
+          msg.textContent = "task enfileirada — veja a esteira correspondente abaixo.";
+          msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-olive-900";
+          await atualizar();
+        } catch (erro) {
+          msg.textContent = "não deu certo disparar essa ação.";
+          msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-rust-900";
+        }
+      });
     });
 
     document.getElementById("btn-exemplo").addEventListener("click", () => {
