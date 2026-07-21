@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.tasks import task
 
 from desk.domain import ParametroHVIInvalido
+from desk.extracao import extrair_dados_confirmacao
 from desk.models import Contrato, IndicePreco, LaudoHVI
 
 
@@ -60,3 +61,13 @@ def registrar_leitura_indice(codigo: str, valor: str, data_pregao: str) -> str:
     )
 
     return f"{leitura.codigo} em {leitura.data_pregao}: R$ {leitura.valor}"
+
+
+@task(queue_name="confirmacoes", priority=30)
+def extrair_confirmacao(texto: str) -> str:
+    """Extrai campos estruturados de um texto livre de confirmação de contrao."""
+    dados = extrair_dados_confirmacao(texto)
+    return (
+        f"Extraído: fardo {dados.fardo_codigo}, comprador {dados.comprador}, "
+        f"preço R$ {dados.preco_por_kg}/kg"
+    )

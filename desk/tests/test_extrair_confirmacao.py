@@ -15,8 +15,8 @@ def test_extrair_confirmacao_formata_o_resumo_dos_dados_extraidos():
 
     with patch("desk.tasks.extrair_dados_confirmacao", return_value=dados_fake):
         resultado = extrair_confirmacao.enqueue(
-            "Confirmamos a compra do fardo Br2026001000 pela Têxtil Boa Vista "
-            "ao preço de R$ 6.85/kg."
+            "Confirmamos a compra do fardo BR2026001000 pela Têxtil Boa Vista "
+            "ao preço de R$ 6,85/kg."
         )
 
     assert resultado.status == TaskResultStatus.SUCCESSFUL
