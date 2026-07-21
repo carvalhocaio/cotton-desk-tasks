@@ -1,6 +1,8 @@
 import csv
 import io
+from functools import partial
 
+from django.db import transaction
 from django.http import JsonResponse
 from django.tasks import TaskResultStatus, default_task_backend
 from django.views.decorators.csrf import csrf_exempt
@@ -57,7 +59,8 @@ def upload_lote_laudos(request):
 
     Atalho de demonstração: usa `get_or_create` por código de fardo para que
     o mesmo CSV possa ser reenviado em testes manuais sem estourar por
-    unicidade - não é a regra real de deduplicação de fardo."""
+    unicidade — não é a regra real de deduplicação de fardo.
+    """
     arquivo = request.FILES["arquivo"]
     texto = io.TextIOWrapper(arquivo.file, encoding="utf-8")
     leitor = csv.DictReader(texto)
