@@ -11,7 +11,12 @@ from django.views.decorators.http import require_GET, require_POST
 from django_tasks_db.models import DBTaskResult
 
 from desk.models import Contrato, Fardo, LaudoHVI
-from desk.tasks import confirmar_contrato
+from desk.tasks import (
+    confirmar_contrato,
+    gerar_relatorio_safra,
+    registrar_leitura_indice,
+    tarefa_de_demonstracao,
+)
 from desk.tasks import resumir_laudo as tarefa_resumir_laudo
 
 
@@ -39,18 +44,28 @@ def status_da_task(request, task_id):
     return JsonResponse({"status": "pendente"})
 
 
+def _fechar_contrato(fardo, comprador, preco_por_kg):
+    """Cria o contrato e agenda a confirmação para depois do commit.
+
+    Compartilhado entre a view `checkout` (fluxo real) e `contrato_teste`
+    (botão de demonstração do painel).
+    """
+    with transaction.atomic():
+        contrato = Contrato.objects.create(
+            fardo=fardo, comprador=comprador, preco_por_kg=preco_por_kg
+        )
+        transaction.on_commit(partial(confirmar_contrato.enqueue, contrato.id))
+    return contrato
+
+
 @csrf_exempt
 @require_POST
 def checkout(request):
     """Fecha um contrato e agenda a confirmação para depois do commit."""
     fardo = Fardo.objects.get(pk=request.POST["fardo_id"])
-    with transaction.atomic():
-        contrato = Contrato.objects.create(
-            fardo=fardo,
-            comprador=request.POST["comprador"],
-            preco_por_kg=request.POST["preco_por_kg"],
-        )
-        transaction.on_commit(partial(confirmar_contrato.enqueue, contrato.id))
+    contrato = _fechar_contrato(
+        fardo, request.POST["comprador"], request.POST["preco_por_kg"]
+    )
     return JsonResponse({"contrato_id": contrato.id}, status=201)
 
 
@@ -118,6 +133,45 @@ def limpar_tasks(request):
     """Remove todo o histórico de tasks — atalho de demonstração para reiniciar o painel."""
     removidas, _detalhes = DBTaskResult.objects.all().delete()
     return JsonResponse({"removidas": removidas})
+
+
+@csrf_exempt
+@require_POST
+def relatorio_teste(request):
+    """Botão de demonstração: enfileira um relatório de safra."""
+    safra = request.POST.get("safra", "2025/2026")
+    resultado = gerar_relatorio_safra.enqueue(safra)
+    return JsonResponse({"task_id": str(resultado.id)}, status=202)
+
+
+@csrf_exempt
+@require_POST
+def preco_teste(request):
+    """Botão de demonstração: enfileira uma leitura de índice de preço."""
+    resultado = registrar_leitura_indice.enqueue("ICE-CT2", "82.35", "2026-04-28")
+    return JsonResponse({"task_id": str(resultado.id)}, status=202)
+
+
+@csrf_exempt
+@require_POST
+def contrato_teste(request):
+    """Botão de demonstração: fecha um contrato usando o fardo mais recente."""
+    fardo = Fardo.objects.order_by("-id").first()
+    if fardo is None:
+        return JsonResponse(
+            {"erro": "nenhum fardo cadastrado — suba um lote de laudos primeiro"},
+            status=409,
+        )
+    contrato = _fechar_contrato(fardo, "Têxtil Demonstração", "6.85")
+    return JsonResponse({"contrato_id": contrato.id}, status=201)
+
+
+@csrf_exempt
+@require_POST
+def demo_lenta(request):
+    """Botão de demonstração: enfileira a task artificialmente lenta."""
+    resultado = tarefa_de_demonstracao.enqueue()
+    return JsonResponse({"task_id": str(resultado.id)}, status=202)
 
 
 def dashboard(request):

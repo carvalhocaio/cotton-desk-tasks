@@ -124,6 +124,6 @@ STATIC_URL = "static/"
 TASKS = {
     "default": {
         "BACKEND": "django_tasks_db.DatabaseBackend",
-        "QUEUES": ["laudos", "relatorios", "confirmacoes", "precos"],
+        "QUEUES": ["laudos", "relatorios", "confirmacoes", "precos", "demo"],
     },
 }

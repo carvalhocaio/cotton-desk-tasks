@@ -1,3 +1,4 @@
+import time
 from decimal import Decimal
 
 from django.tasks import task
@@ -79,3 +80,15 @@ def extrair_confirmacao(texto: str) -> str:
     )
     confirmar_contrato.enqueue(contrato.id)
     return f"Contrato {contrato.id} criado: fardo {fardo.codigo}, comprador {contrato.comprador}"
+
+@task(queue_name="demo", priority=0)
+def tarefa_de_demonstracao() -> str:
+    """Task artificialmente lenta, só para o painel exibir o estado 'executando'.
+
+    O `sleep` aqui é intencional e honesto: simular latência É a função desta
+    task. Ela não tem papel no negócio — existe apenas para tornar visível no
+    dashboard a transição READY → RUNNING → SUCCESSFUL, que nas tasks reais
+    (rápidas) acontece rápido demais para o olho acompanhar.
+    """
+    time.sleep(4)
+    return "demonstração concluída após 4s de execução simulada"

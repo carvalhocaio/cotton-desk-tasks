@@ -1,4 +1,5 @@
 import pytest
+from django.tasks import TaskResultStatus
 from django.urls import reverse
 
 from desk.models import Contrato, IndicePreco
@@ -35,3 +36,10 @@ def test_contrato_teste_sem_fardo_disponivel_retorna_erro(client):
 
     assert resposta.status_code == 409
     assert "erro" in resposta.json()
+
+
+def test_demo_lenta_enfileira_task_de_demonstracao(client):
+    resposta = client.post(reverse("demo_lenta"))
+
+    assert resposta.status_code == 202
+    assert "task_id" in resposta.json()
