@@ -118,6 +118,7 @@ def tasks_json(request):
             "fila": t.queue_name,
             "tarefa": t.task_path.rsplit(".", 1)[-1],
             "status": t.status,
+            "erro": t.exception_class_path.rsplit(".", 1)[-1] or None,
             "enfileirada_em": t.enqueued_at.isoformat() if t.enqueued_at else None,
             "iniciada_em": t.started_at.isoformat() if t.started_at else None,
             "finalizada_em": t.finished_at.isoformat() if t.finished_at else None,
