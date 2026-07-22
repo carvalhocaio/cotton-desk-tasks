@@ -153,7 +153,7 @@
     function cartaoTask(t) {
       const info = STATUS[t.status] ?? { label: t.status, classes: "bg-ink/10 text-ink" };
       const el = document.createElement("div");
-      el.className = "card shrink-0 w-52 rounded-sm border-2 border-dashed border-ink/15 bg-kraft px-3 py-2.5 opacity-0 -translate-x-2 transition-all duration-500";
+      el.className = "card shrink-0 w-56 rounded-sm border-2 border-dashed border-ink/15 bg-kraft px-3 py-2.5 opacity-0 -translate-x-2 transition-all duration-500";
       el.dataset.taskId = t.id;
       el.innerHTML = `
         <div class="flex items-center justify-between mb-1">
@@ -161,6 +161,7 @@
           <span class="status-pill text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full ${info.classes}">${info.label}</span>
         </div>
         <p class="font-mono text-xs font-medium truncate" title="${t.tarefa}">${t.tarefa}</p>
+        <p class="erro-motivo font-mono text-[10px] text-rust-900 mt-1 truncate ${t.erro ? "" : "hidden"}" title="${t.erro ?? ""}">${t.erro ?? ""}</p>
       `;
       return el;
     }
@@ -170,6 +171,11 @@
       const pill = el.querySelector(".status-pill");
       pill.className = `status-pill text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full ${info.classes}`;
       pill.textContent = info.label;
+
+      const motivo = el.querySelector(".erro-motivo");
+      motivo.textContent = t.erro ?? "";
+      motivo.title = t.erro ?? "";
+      motivo.classList.toggle("hidden", !t.erro);
     }
 
     async function atualizar() {
