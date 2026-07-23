@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Ruff (lint)
+        run: uv run ruff check
+
+      - name: Ruff (format)
+        run: uv run ruff format --check
+
+      - name: Auditoria de dependências (pip-audit)
+        run: uv run pip-audit
+
+      - name: Testes
+        # Chave fictícia: a suíte não chama a API do Gemini (o agente usa
+        # defer_model_check=True), mas o valor precisa existir no ambiente
+        # para o load_dotenv() em desk/extracao.py não deixar a variável ausente.
+        env:
+          GOOGLE_API_KEY: dummy-key-for-ci
+        run: uv run pytest
