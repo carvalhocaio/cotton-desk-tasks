@@ -62,3 +62,38 @@ verdade com `confirm_contrato` pela fila `confirmacoes`, separar numa fila
 própria. Se a taxa de `Fardo.DoesNotExists` se mostrar alta, na prática,
 considerar uma etapa de correspondência fuzzy (ex.: sugerir o fardo mais
 próximo) antes de falhar a task.
+
+---
+
+# ADR 003: Polling simples no painel, em vez de WebSocket
+
+## Status
+Aceito.
+
+## Contexto
+O painel (`/dashboard/`) precisa refletir a mudança de estado das tasks
+(`READY` -> `RUNNING` -> `SUCCESSFUL`/`FAILED`) sem que o usuário recarregue a
+página. As opções consideradas foram polling via `fetch` periódico,
+Server-Sent Events (SSE) e WebSocket via Django Channels.
+
+## Decisão
+Polling: o JS do painel chama `GET /dashboard/tasks.json` a cada 1,5s e
+reconcilia os cartões na tela.
+
+## Motivos
+- **Zero infraestrutura adicional.** WebSocket com Channels e exigiria servidor ASGI, a dependência `channels` e uma channel layer (normalmente Redis) - o mesmo tipo de peso operacional que o ADR 001 evitou ao escolher `django-task-db` em vez de Celery. Manter a coerência importa: não faz sentido fugir do Redis no backend de tasks e reintroduzi-lo no painel.
+- **A fonte da verdade já é uma tabela.** O `DatabaseBackend` grava o estado de cada task em `DBTaskResult`. Um poll é literalmente um `SELECT` - não há evento em memória a propagar, o dado está no banco de qualquer jeito.
+- **O escopo do projeto é aprender Django Tasks**, não transporte em tempo real. Complexidade de transporte tiraria o foco do que o painel existe para mostrar.
+
+## Trade-offs conhecidos (vividos neste projeto)
+- **Transições mais curtas que o intervalo de poll são invisíveis.** Sentimos isso, na prática: `resumir_laudo` termina em milissegundos, então o estado `RUNNING` raramente aparece na tela - o cartão salta de `READY` para `SUCCESSUL`/`FAILED`. Só foi possível *ver* o estado `RUNNING` criando a `tarefa_de_demonstracao` (fila `demo`), artificialmente lenta e explicitamente rotulada como tal. Um transporte por evento (SSE/WebSocket) capturaria toda transição, inclusive as instantâneas.
+- **Requisições constantes mesmo com o painel ocioso.** Uma consulta a cada 1,5s por aba aberta, independente de haver trabalho na fila.
+- **Não escala para muitos usuários simultâneos.** Cada navegador aberto gera uma varredura das 50 tasks mais recentes a cada ciclo. Para um painel de demonstração local isso é irrelevante; para um painel operacional de mesa, com vários operadores, não seria.
+- **A flag `--interval` do `db_worker` afeta o que se vê.** Aumentá-la faz as tasks ficarem mais tempo em `READY` (visível), mas não altera a duração da execução em si - descoberta empírica que vale registrar para quem for reproduzir a demonstração.
+
+## Gatilho para revisão
+Se o painel deixar de ser demonstração e passar a ser ferramenta operacional
+com vários usuários simultâneos, ou se for necessário observar fielmente
+transições curtas, migrar para **SSE antes de WebSocket** — o fluxo é
+unidirecional (servidor → navegador), então o full-duplex do WebSocket seria
+capacidade não utilizada, com custo de infraestrutura maior.
