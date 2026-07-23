@@ -34,7 +34,9 @@ def gerar_relatorio_safra(safra: str) -> str:
             validos += 1
         except ParametroHVIInvalido:
             invalidos += 1
-    return f"Safra {safra}: {total} laudos, {validos} válido(s), {invalidos} inválido(s)"
+    return (
+        f"Safra {safra}: {total} laudos, {validos} válido(s), {invalidos} inválido(s)"
+    )
 
 
 @task(queue_name="confirmacoes", priority=50)
@@ -80,6 +82,7 @@ def extrair_confirmacao(texto: str) -> str:
     )
     confirmar_contrato.enqueue(contrato.id)
     return f"Contrato {contrato.id} criado: fardo {fardo.codigo}, comprador {contrato.comprador}"
+
 
 @task(queue_name="demo", priority=0)
 def tarefa_de_demonstracao() -> str:

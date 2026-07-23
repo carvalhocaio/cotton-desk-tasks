@@ -35,7 +35,9 @@ def status_da_task(request, task_id):
     resultado.refresh()
 
     if resultado.status == TaskResultStatus.SUCCESSFUL:
-        return JsonResponse({"status": "concluida", "resultado": resultado.return_value})
+        return JsonResponse(
+            {"status": "concluida", "resultado": resultado.return_value}
+        )
 
     if resultado.status == TaskResultStatus.FAILED:
         erro = resultado.errors[0].exception_class_path

@@ -31,5 +31,5 @@ def fardo():
         safra="2025/2026",
         produtor="Fazenda Bom Futuro",
         peso_kg="217.00",
-        data_classificacao="2026-03-22"
+        data_classificacao="2026-03-22",
     )

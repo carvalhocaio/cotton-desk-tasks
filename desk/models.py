@@ -31,6 +31,9 @@ class LaudoHVI(models.Model):
     uniformidade = models.DecimalField(max_digits=4, decimal_places=1)
     data_emissao = models.DateField(auto_now_add=True)
 
+    def __str__(self) -> str:
+        return f"Laudo HVI do fardo {self.fardo.codigo}"
+
     def to_dominio(self) -> HVIParametros:
         """Converte os campos brutos do banco no value object de domínio validado."""
         return HVIParametros(
@@ -39,9 +42,6 @@ class LaudoHVI(models.Model):
             resistencia=float(self.resistencia),
             uniformidade=float(self.uniformidade),
         )
-
-    def __str__(self) -> str:
-        return f"Laudo HVI do fardo {self.fardo.codigo}"
 
 
 class Contrato(models.Model):
@@ -59,7 +59,7 @@ class Contrato(models.Model):
 class IndicePreco(models.Model):
     """Leitura diária de um índice de preço de referência do algodão."""
 
-    codigo = models.CharField(max_length=20) # ex.: "ICE-CT2", "CEPEA-8DIAS"
+    codigo = models.CharField(max_length=20)  # ex.: "ICE-CT2", "CEPEA-8DIAS"
     valor = models.DecimalField(max_digits=8, decimal_places=2)
     data_pregao = models.DateField()
 

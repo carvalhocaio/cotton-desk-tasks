@@ -56,8 +56,8 @@ class HVIParametros:
     def _validar_comprimento(self) -> None:
         if self.comprimento < COMPRIMENTO_MIN:
             raise ComprimentoAbaixoDoMinimo(
-                f"comprimento {self.comprimento}\" abaixo do mínimo comercial "
-                f"{COMPRIMENTO_MIN}\""
+                f'comprimento {self.comprimento}" abaixo do mínimo comercial '
+                f'{COMPRIMENTO_MIN}"'
             )
 
     def _validar_resistencia(self) -> None:

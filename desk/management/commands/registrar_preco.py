@@ -9,12 +9,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("codigo", type=str, help="Código do índice, ex.: ICE-CT2")
         parser.add_argument("valor", type=str, help="Valor da leitura, ex.: 82.35")
-        parser.add_argument("data_pregao", type=str, help="Data do pregão, formato YYYY-MM-DD")
+        parser.add_argument(
+            "data_pregao", type=str, help="Data do pregão, formato YYYY-MM-DD"
+        )
 
     def handle(self, *args, **options):
         resultado = registrar_leitura_indice.enqueue(
             options["codigo"], options["valor"], options["data_pregao"]
         )
-        self.stdout.write(
-            self.style.SUCCESS(f"Enfileirado: task_id={resultado.id}")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Enfileirado: task_id={resultado.id}"))

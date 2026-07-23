@@ -1,5 +1,4 @@
 import pytest
-from django.tasks import TaskResultStatus
 from django.urls import reverse
 
 from desk.models import Contrato, IndicePreco

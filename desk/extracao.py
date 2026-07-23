@@ -4,6 +4,7 @@ from pydantic_ai import Agent
 
 load_dotenv()
 
+
 class DadosConfirmacao(BaseModel):
     """Campos extraídos de um texto de confirmação de contrato."""
 
@@ -24,6 +25,7 @@ agente_extracao = Agent(
     ),
     defer_model_check=True,
 )
+
 
 def extrair_dados_confirmacao(texto: str) -> DadosConfirmacao:
     """Usa o agente PydanticAI para extrair campos estruturados de um texto livre."""

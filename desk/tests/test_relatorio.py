@@ -39,4 +39,7 @@ def test_gerar_relatorio_safra_conta_laudos_validos_e_invalidos():
     resultado = gerar_relatorio_safra.enqueue("2025/2026")
 
     assert resultado.status == TaskResultStatus.SUCCESSFUL
-    assert resultado.return_value == "Safra 2025/2026: 2 laudos, 1 válido(s), 1 inválido(s)"
+    assert (
+        resultado.return_value
+        == "Safra 2025/2026: 2 laudos, 1 válido(s), 1 inválido(s)"
+    )

@@ -9,7 +9,11 @@ def test_checkout_registra_confirmacao_para_rodar_apos_commit(
     with django_capture_on_commit_callbacks() as callbacks:
         resposta = client.post(
             reverse("checkout"),
-            {"fardo_id": fardo.id, "comprador": "Têxtil Boa Vista", "preco_por_kg": "6.85"},
+            {
+                "fardo_id": fardo.id,
+                "comprador": "Têxtil Boa Vista",
+                "preco_por_kg": "6.85",
+            },
         )
 
     assert resposta.status_code == 201
