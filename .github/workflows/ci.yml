@@ -26,13 +26,14 @@ jobs:
       - name: Ruff (format)
         run: uv run ruff format --check
 
-      - name: Auditoria de dependências (pip-audit)
+      - name: Dependency audit (pip-audit)
         run: uv run pip-audit
 
-      - name: Testes
-        # Chave fictícia: a suíte não chama a API do Gemini (o agente usa
-        # defer_model_check=True), mas o valor precisa existir no ambiente
-        # para o load_dotenv() em desk/extracao.py não deixar a variável ausente.
+      - name: Tests
+        # Dummy key: the suite doesn't call the Gemini API (the agent uses
+        # defer_model_check=True), but the value needs to exist in the
+        # environment so load_dotenv() in desk/extraction.py doesn't leave
+        # the variable missing.
         env:
           GOOGLE_API_KEY: dummy-key-for-ci
         run: uv run pytest

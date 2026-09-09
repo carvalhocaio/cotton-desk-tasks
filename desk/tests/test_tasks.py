@@ -1,50 +1,50 @@
 import pytest
 from django.tasks import TaskResultStatus
 
-from desk.models import Contrato, Fardo, LaudoHVI
-from desk.tasks import confirmar_contrato, resumir_laudo
+from desk.models import Bale, Contract, HVIReport
+from desk.tasks import confirm_contract, summarize_report
 
 
 @pytest.mark.django_db
-def test_resumir_laudo_com_laudo_valido_retorna_resumo_e_status_successful():
-    fardo = Fardo.objects.create(
-        codigo="BR2026000200",
-        safra="2025/2026",
-        produtor="Fazenda Bom Futuro",
-        peso_kg="218.00",
-        data_classificacao="2026-03-20",
+def test_summarize_report_with_valid_report_returns_summary_and_successful_status():
+    bale = Bale.objects.create(
+        code="BR2026000200",
+        season="2025/2026",
+        producer="Bom Futuro Farm",
+        weight_kg="218.00",
+        classification_date="2026-03-20",
     )
-    laudo = LaudoHVI.objects.create(
-        fardo=fardo,
+    report = HVIReport.objects.create(
+        bale=bale,
         micronaire="4.20",
-        comprimento="1.16",
-        resistencia="29.0",
-        uniformidade="82.0",
+        length="1.16",
+        strength="29.0",
+        uniformity="82.0",
     )
 
-    resultado = resumir_laudo.enqueue(laudo.id)
+    result = summarize_report.enqueue(report.id)
 
-    assert resultado.status == TaskResultStatus.SUCCESSFUL
-    assert "BR2026000200" in resultado.return_value
+    assert result.status == TaskResultStatus.SUCCESSFUL
+    assert "BR2026000200" in result.return_value
 
 
 @pytest.mark.django_db
-def test_confirmar_contrato_com_contrato_valido_retorna_confirmacao_e_status_successful():
-    fardo = Fardo.objects.create(
-        codigo="BR2026000800",
-        safra="2025/2026",
-        produtor="Fazenda Bom Futuro",
-        peso_kg="219.00",
-        data_classificacao="2026-04-10",
+def test_confirm_contract_with_valid_contract_returns_confirmation_and_successful_status():
+    bale = Bale.objects.create(
+        code="BR2026000800",
+        season="2025/2026",
+        producer="Bom Futuro Farm",
+        weight_kg="219.00",
+        classification_date="2026-04-10",
     )
-    contrato = Contrato.objects.create(
-        fardo=fardo,
-        comprador="Têxtil Boa Vista",
-        preco_por_kg="6.85",
+    contract = Contract.objects.create(
+        bale=bale,
+        buyer="Boa Vista Textile",
+        price_per_kg="6.85",
     )
 
-    resultado = confirmar_contrato.enqueue(contrato.id)
+    result = confirm_contract.enqueue(contract.id)
 
-    assert resultado.status == TaskResultStatus.SUCCESSFUL
-    assert "BR2026000800" in resultado.return_value
-    assert "Têxtil Boa Vista" in resultado.return_value
+    assert result.status == TaskResultStatus.SUCCESSFUL
+    assert "BR2026000800" in result.return_value
+    assert "Boa Vista Textile" in result.return_value

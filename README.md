@@ -1,180 +1,199 @@
 # cotton-desk-tasks
 
-Painel operacional de uma trading de algodão, construído sobre o Task
-Framework nativo do Django 6 (via
-[`django-tasks-db`](https://pypi.org/project/django-tasks-db/)), como
-projeto de estudo do framework — cobrindo resumo de laudos HVI, relatórios
-de safra, confirmação de contratos e extração de dados estruturados via
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-6.0-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![PydanticAI](https://img.shields.io/badge/PydanticAI-Structured%20Extraction-E92063?logo=pydantic&logoColor=white)](https://ai.pydantic.dev/)
+[![uv](https://img.shields.io/badge/managed%20with-uv-DE5FE9)](https://docs.astral.sh/uv/)
+
+Operational dashboard for a cotton trading company, built on Django 6's
+native Task Framework (via
+[`django-tasks-db`](https://pypi.org/project/django-tasks-db/)), as a
+study project for the framework — covering HVI report summaries, season
+reports, contract confirmation, and structured data extraction via
 [PydanticAI](https://ai.pydantic.dev/) + Gemini.
 
-## Cenário
+## Table of Contents
 
-O Cotton Desk recebe laudos HVI do laboratório, fecha contratos com
-compradores e precisa manter os índices de preço de referência (ICE,
-CEPEA) atualizados diariamente. Cada uma dessas operações dispara um
-processamento assíncrono — resumir um laudo, consolidar uma safra, gerar
-a confirmação textual de um contrato — que não deve bloquear a resposta
-ao usuário. O painel em `/dashboard/` mostra essas tasks em tempo real
-(via polling), transitando entre os estados `READY` → `RUNNING` →
+- [Scenario](#scenario)
+- [Architecture decisions](#architecture-decisions)
+- [Structure](#structure)
+- [Task queues](#task-queues)
+- [Setup](#setup)
+- [Makefile](#makefile)
+- [Usage](#usage)
+- [Tests](#tests)
+- [Code quality](#code-quality)
+- [Security](#security)
+- [Known limitations](#known-limitations)
+- [Credits](#credits)
+
+## Scenario
+
+Cotton Desk receives HVI reports from the lab, closes contracts with
+buyers, and needs to keep reference price indices (ICE, CEPEA) updated
+daily. Each of these operations triggers asynchronous processing —
+summarizing a report, consolidating a season, generating the textual
+confirmation of a contract — that must not block the response to the
+user. The dashboard at `/dashboard/` shows these tasks in real time (via
+polling), transitioning between the states `READY` → `RUNNING` →
 `SUCCESSFUL`/`FAILED`.
 
-## Decisões de arquitetura
+## Architecture decisions
 
-As decisões de maior impacto estão registradas em [`ADR.md`](ADR.md):
+The highest-impact decisions are recorded in [`ADR.md`](ADR.md):
 
-| ADR | Decisão                                                       |
-|-----|---------------------------------------------------------------|
-| 001 | Django Tasks Framework (`django-tasks-db`) em vez de Celery   |
-| 002 | PydanticAI + Gemini para extração estruturada de confirmações |
-| 003 | Polling simples no painel, em vez de WebSocket                |
+| ADR | Decision |
+|-----|----------|
+| 001 | Django Tasks Framework (`django-tasks-db`) instead of Celery |
+| 002 | PydanticAI + Gemini for structured extraction of confirmations |
+| 003 | Simple polling on the dashboard, instead of WebSocket |
 
-Cada ADR documenta não só a decisão, mas os trade-offs vividos na prática
-e o gatilho concreto que justificaria revisá-la.
+Each ADR documents not just the decision, but the trade-offs experienced
+in practice and the concrete trigger that would justify revisiting it.
 
-## Estrutura
+## Structure
 
 ```
 .
-├── config/                          # settings, urls, wsgi/asgi do projeto Django
+├── config/                          # settings, urls, wsgi/asgi for the Django project
 ├── desk/
-│   ├── models.py                    # Fardo, LaudoHVI, Contrato, IndicePreco
-│   ├── domain.py                    # HVIParametros — validação de negócio, sem Django
-│   ├── tasks.py                     # tasks assíncronas (@task), uma por fila
-│   ├── extracao.py                  # agente PydanticAI para extração de confirmações
-│   ├── views.py                     # endpoints HTTP + painel
+│   ├── models.py                    # Bale, HVIReport, Contract, PriceIndex
+│   ├── domain.py                    # HVIParameters — business validation, no Django
+│   ├── tasks.py                     # async tasks (@task), one per queue
+│   ├── extraction.py                # PydanticAI agent for confirmation extraction
+│   ├── views.py                     # HTTP endpoints + dashboard
 │   ├── urls.py
 │   ├── templates/desk/dashboard.html
-│   ├── management/commands/registrar_preco.py
+│   ├── management/commands/register_price.py
 │   └── tests/
-├── ADR.md                           # decisões de arquitetura registradas
+├── ADR.md                           # recorded architecture decisions
 ├── manage.py
 └── main.py
 ```
 
-`domain.py` não depende de Django nem de banco — a validação dos
-parâmetros HVI (micronaire, comprimento, resistência, uniformidade) é um
-value object puro, testável isoladamente. `LaudoHVI.to_dominio()` é o
-único ponto de conversão entre o dado bruto salvo e a regra de negócio.
+`domain.py` doesn't depend on Django or the database — validating the HVI
+parameters (micronaire, length, strength, uniformity) is a pure value
+object, testable in isolation. `HVIReport.to_domain()` is the single
+conversion point between the raw saved data and the business rule.
 
-## Filas de tasks
+## Task queues
 
-| Fila           | Task                       | Prioridade | O que faz                                                               |
-|----------------|----------------------------|------------|-------------------------------------------------------------------------|
-| `laudos`       | `resumir_laudo`            | 50         | Resume um laudo HVI a partir dos parâmetros validados                   |
-| `relatorios`   | `gerar_relatorio_safra`    | -10        | Consolida quantos laudos de uma safra são comercialmente válidos        |
-| `confirmacoes` | `confirmar_contrato`       | 50         | Gera a confirmação textual de um contrato fechado                       |
-| `confirmacoes` | `extrair_confirmacao`      | 30         | Extrai dados de um texto livre via IA e cria o contrato                 |
-| `precos`       | `registrar_leitura_indice` | 0          | Persiste uma leitura de índice de preço                                 |
-| `demo`         | `tarefa_de_demonstracao`   | 0          | Task artificialmente lenta, só para exibir o estado `RUNNING` no painel |
+| Queue           | Task                     | Priority | What it does |
+|-----------------|--------------------------|----------|--------------|
+| `hvi_reports`   | `summarize_report`       | 50       | Summarizes an HVI report from its validated parameters |
+| `season_reports`| `generate_season_report` | -10      | Consolidates how many reports from a season are commercially valid |
+| `confirmations` | `confirm_contract`       | 50       | Generates the textual confirmation of a closed contract |
+| `confirmations` | `extract_confirmation`   | 30       | Extracts data from free text via AI and creates the contract |
+| `prices`        | `record_index_reading`   | 0        | Persists a price index reading |
+| `demo`          | `demo_task`              | 0        | Artificially slow task, just to show the `RUNNING` state on the dashboard |
 
 ## Setup
 
 ```bash
 uv sync
-echo "GOOGLE_API_KEY=sua-chave-aqui" >> .env
+echo "GOOGLE_API_KEY=your-key-here" >> .env
 uv run python manage.py migrate
 ```
 
-A chave é lida de `GOOGLE_API_KEY` e usada pelo agente PydanticAI em
-`desk/extracao.py`. Sem ela, apenas os fluxos que chamam a API do Gemini
-de fato (`extrair_confirmacao`) ficam indisponíveis — o restante do
-projeto funciona normalmente.
+The key is read from `GOOGLE_API_KEY` and used by the PydanticAI agent in
+`desk/extraction.py`. Without it, only the flows that actually call the
+Gemini API (`extract_confirmation`) become unavailable — the rest of the
+project works normally.
 
 ## Makefile
 
-Os comandos de instalação, execução, testes e qualidade abaixo também
-estão disponíveis como atalhos via `make` (`make help` lista todos):
+The install, run, test, and quality commands below are also available as
+shortcuts via `make` (`make help` lists them all):
 
 ```bash
 make install    # uv sync
 make migrate    # manage.py migrate
 make run        # manage.py runserver
 make worker     # manage.py db_worker
-make test       # suíte de testes
+make test       # test suite
 make lint       # ruff check
 make format     # ruff format
-make ci         # lint + format-check + pip-audit + testes (mesmo pipeline da CI)
+make ci         # lint + format-check + pip-audit + tests (same pipeline as CI)
 ```
 
-## Uso
+## Usage
 
 ```bash
-# servidor de desenvolvimento
+# development server
 uv run python manage.py runserver
 
-# worker que processa as filas (outro terminal)
+# worker that processes the queues (another terminal)
 uv run python manage.py db_worker
 
-# registrar uma leitura de índice de preço (ex.: via cron)
-uv run python manage.py registrar_preco ICE-CT2 82.35 2026-04-28
+# record a price index reading (e.g. via cron)
+uv run python manage.py register_price ICE-CT2 82.35 2026-04-28
 ```
 
-Com os dois processos no ar, o painel fica em `http://localhost:8000/dashboard/`,
-com botões de demonstração para enfileirar cada tipo de task e acompanhar
-a transição de estado. O worker aceita `--interval` para ajustar a
-frequência de poll do próprio banco (afeta só a visibilidade no painel,
-não a duração da execução da task).
+With both processes running, the dashboard is at
+`http://localhost:8000/dashboard/`, with demo buttons to enqueue each
+type of task and watch the state transitions. The worker accepts
+`--interval` to adjust its own database poll frequency (this only
+affects dashboard visibility, not the task's execution duration).
 
-## Testes
+## Tests
 
 ```bash
 uv run pytest
 ```
 
-A suíte não depende de rede: o teste de extração (`test_extrair_confirmacao.py`)
-usa `Agent.override()` com `TestModel` do PydanticAI, e os testes de task
-usam os backends de teste do Django Tasks Framework (`ImmediateBackend`)
-ou o `DatabaseBackend` diretamente quando o comportamento do worker real
-importa (`test_worker_real.py`).
+The suite doesn't depend on the network: the extraction test
+(`test_extract_confirmation.py`) uses `Agent.override()` with
+PydanticAI's `TestModel`, and the task tests use the Django Tasks
+Framework's test backends (`ImmediateBackend`) or `DatabaseBackend`
+directly when the real worker's behavior matters (`test_worker_real.py`).
 
-## Qualidade de código
+## Code quality
 
-Lint e formatação com [Ruff](https://docs.astral.sh/ruff/):
+Lint and formatting with [Ruff](https://docs.astral.sh/ruff/):
 
 ```bash
 uv run ruff check              # lint
-uv run ruff check --fix        # lint + correções automáticas
-uv run ruff format             # formatação
+uv run ruff check --fix        # lint + automatic fixes
+uv run ruff format             # formatting
 ```
 
-Ou via `make lint`, `make lint-fix`, `make format`, `make format-check`.
-`make ci` roda o mesmo pipeline usado no GitHub Actions.
+Or via `make lint`, `make lint-fix`, `make format`, `make format-check`.
+`make ci` runs the same pipeline used in GitHub Actions.
 
-O [GitHub Actions](.github/workflows/ci.yml) roda `ruff check`,
-`ruff format --check`, um scan de dependências (`pip-audit`) e a suíte de
-testes a cada push/PR na `main`.
+[GitHub Actions](.github/workflows/ci.yml) runs `ruff check`,
+`ruff format --check`, a dependency scan (`pip-audit`), and the test suite
+on every push/PR to `main`.
 
-## Segurança
+## Security
 
-- **`GOOGLE_API_KEY` fica em `.env`, fora do controle de versão** (ver
-  `.gitignore`). O `Agent` do PydanticAI é criado com `defer_model_check=True`
-  para que a ausência da chave não quebre a suíte inteira só por importar
-  o módulo.
-- **Falha de correspondência é tratada como falha real, não mascarada.**
-  Se `extrair_confirmacao` recebe um código de fardo que não existe, a
-  task falha com `Fardo.DoesNotExist` em vez de tentar um fallback
-  silencioso — um LLM pode alucinar ou errar o código, e isso precisa
-  ficar visível para triagem humana.
-- **O texto de entrada de `extrair_confirmacao` é processado pela API do
-  Google Gemini** (serviço externo). Não use dados reais de contratos,
-  clientes ou preços na demonstração — use exemplos fictícios.
+- **`GOOGLE_API_KEY` lives in `.env`, outside version control** (see
+  `.gitignore`). PydanticAI's `Agent` is created with
+  `defer_model_check=True` so the missing key doesn't break the whole
+  suite just from importing the module.
+- **A matching failure is treated as a real failure, not masked.** If
+  `extract_confirmation` receives a bale code that doesn't exist, the
+  task fails with `Bale.DoesNotExist` instead of trying a silent
+  fallback — an LLM can hallucinate or get the code wrong, and that needs
+  to stay visible for human triage.
+- **`extract_confirmation`'s input text is processed by the Google
+  Gemini API** (an external service). Don't use real contract, customer,
+  or price data in the demo — use fictitious examples.
 
-## Limitações conhecidas
+## Known limitations
 
-- **Sem agendamento embutido.** `registrar_preco` precisa de um cron
-  externo chamando o management command; o Tasks Framework nativo não
-  tem equivalente ao Celery Beat.
-- **Transições de estado mais curtas que o intervalo de poll do painel
-  (1,5s) são difíceis de observar.** `tarefa_de_demonstracao` existe só
-  para tornar visível o estado `RUNNING`, que nas tasks reais passa rápido
-  demais.
-- **`ImmediateBackend` não suporta `get_result()` por id** — consultar o
-  status de uma task após enfileirada exige o `DatabaseBackend`.
-- **Sem correspondência fuzzy de fardo.** Se `extrair_confirmacao` receber
-  um código de fardo incorreto, a task simplesmente falha; não há
-  sugestão automática do fardo mais próximo.
+- **No built-in scheduling.** `register_price` needs an external cron
+  calling the management command; the native Tasks Framework has no
+  Celery Beat equivalent.
+- **State transitions shorter than the dashboard's poll interval (1.5s)
+  are hard to observe.** `demo_task` exists just to make the `RUNNING`
+  state visible, which passes too fast in the real tasks.
+- **`ImmediateBackend` doesn't support `get_result()` by id** — checking
+  a task's status after enqueueing requires `DatabaseBackend`.
+- **No fuzzy bale matching.** If `extract_confirmation` receives an
+  incorrect bale code, the task simply fails; there's no automatic
+  suggestion of the closest bale.
 
-## Créditos
+## Credits
 
-Projeto de estudo do Django Tasks Framework (`django-tasks-db`) e do
-PydanticAI, aplicados ao domínio de comércio de algodão.
+Study project for the Django Tasks Framework (`django-tasks-db`) and
+PydanticAI, applied to the cotton trading domain.

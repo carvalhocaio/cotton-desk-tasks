@@ -3,25 +3,25 @@ from django.test import override_settings
 from django.urls import reverse
 from django_tasks_db.models import DBTaskResult
 
-from desk.tasks import registrar_leitura_indice
+from desk.tasks import record_index_reading
 
 
 @pytest.mark.django_db
-def test_limpar_tasks_remove_todo_o_historico(client):
+def test_clear_tasks_removes_the_entire_history(client):
     with override_settings(
         TASKS={
             "default": {
                 "BACKEND": "django_tasks_db.DatabaseBackend",
-                "QUEUES": ["laudos", "relatorios", "confirmacoes", "precos"],
+                "QUEUES": ["hvi_reports", "season_reports", "confirmations", "prices"],
             }
         }
     ):
-        registrar_leitura_indice.enqueue("ICE-CT2", "82.35", "2026-04-28")
+        record_index_reading.enqueue("ICE-CT2", "82.35", "2026-04-28")
         assert DBTaskResult.objects.count() == 1
 
-        resposta = client.post(reverse("limpar_tasks"))
+        response = client.post(reverse("clear_tasks"))
 
-    corpo = resposta.json()
-    assert resposta.status_code == 200
-    assert corpo["removidas"] == 1
+    body = response.json()
+    assert response.status_code == 200
+    assert body["removed"] == 1
     assert DBTaskResult.objects.count() == 0

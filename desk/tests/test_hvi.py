@@ -1,72 +1,54 @@
 import pytest
 
 from desk.domain import (
-    ComprimentoAbaixoDoMinimo,
-    HVIParametros,
-    MicronaireForaDaFaixa,
-    ResistenciaAbaixoDoMinimo,
-    UniformidadeAbaixoDoMinimo,
+    HVIParameters,
+    LengthBelowMinimum,
+    MicronaireOutOfRange,
+    StrengthBelowMinimum,
+    UniformityBelowMinimum,
 )
 
 
-def test_hvi_com_micronaire_dentro_da_faixa_e_valido():
-    hvi = HVIParametros(
-        micronaire=4.2, comprimento=1.16, resistencia=29.0, uniformidade=82.0
-    )
+def test_hvi_with_micronaire_within_range_is_valid():
+    hvi = HVIParameters(micronaire=4.2, length=1.16, strength=29.0, uniformity=82.0)
     assert hvi.micronaire == 4.2
 
 
-def test_hvi_com_micronaire_abaixo_da_faixa_levanta_erro():
-    with pytest.raises(MicronaireForaDaFaixa):
-        HVIParametros(
-            micronaire=2.0, comprimento=1.16, resistencia=29.0, uniformidade=82.0
-        )
+def test_hvi_with_micronaire_below_range_raises_error():
+    with pytest.raises(MicronaireOutOfRange):
+        HVIParameters(micronaire=2.0, length=1.16, strength=29.0, uniformity=82.0)
 
 
-def test_hvi_com_micronaire_acima_da_faixa_levanta_erro():
-    with pytest.raises(MicronaireForaDaFaixa):
-        HVIParametros(
-            micronaire=7.5, comprimento=1.16, resistencia=29.0, uniformidade=82.0
-        )
+def test_hvi_with_micronaire_above_range_raises_error():
+    with pytest.raises(MicronaireOutOfRange):
+        HVIParameters(micronaire=7.5, length=1.16, strength=29.0, uniformity=82.0)
 
 
-def test_hvi_com_comprimento_no_minimo_comercial_e_valido():
-    hvi = HVIParametros(
-        micronaire=4.2, comprimento=1.11, resistencia=29.0, uniformidade=82.0
-    )
-    assert hvi.comprimento == 1.11
+def test_hvi_with_length_at_commercial_minimum_is_valid():
+    hvi = HVIParameters(micronaire=4.2, length=1.11, strength=29.0, uniformity=82.0)
+    assert hvi.length == 1.11
 
 
-def test_hvi_com_comprimento_abaixo_do_minimo_comercial_levanta_erro():
-    with pytest.raises(ComprimentoAbaixoDoMinimo):
-        HVIParametros(
-            micronaire=4.2, comprimento=1.05, resistencia=29.0, uniformidade=82.0
-        )
+def test_hvi_with_length_below_commercial_minimum_raises_error():
+    with pytest.raises(LengthBelowMinimum):
+        HVIParameters(micronaire=4.2, length=1.05, strength=29.0, uniformity=82.0)
 
 
-def test_hvi_com_resistencia_no_minimo_comercial_e_valida():
-    hvi = HVIParametros(
-        micronaire=4.2, comprimento=1.16, resistencia=28.0, uniformidade=82.0
-    )
-    assert hvi.resistencia == 28.0
+def test_hvi_with_strength_at_commercial_minimum_is_valid():
+    hvi = HVIParameters(micronaire=4.2, length=1.16, strength=28.0, uniformity=82.0)
+    assert hvi.strength == 28.0
 
 
-def test_hvi_com_resistencia_abaixo_do_minimo_comercial_levanta_erro():
-    with pytest.raises(ResistenciaAbaixoDoMinimo):
-        HVIParametros(
-            micronaire=4.2, comprimento=1.16, resistencia=24.0, uniformidade=82.0
-        )
+def test_hvi_with_strength_below_commercial_minimum_raises_error():
+    with pytest.raises(StrengthBelowMinimum):
+        HVIParameters(micronaire=4.2, length=1.16, strength=24.0, uniformity=82.0)
 
 
-def test_hvi_com_uniformidade_no_minimo_comercial_e_valida():
-    hvi = HVIParametros(
-        micronaire=4.2, comprimento=1.16, resistencia=29.0, uniformidade=80.0
-    )
-    assert hvi.uniformidade == 80.0
+def test_hvi_with_uniformity_at_commercial_minimum_is_valid():
+    hvi = HVIParameters(micronaire=4.2, length=1.16, strength=29.0, uniformity=80.0)
+    assert hvi.uniformity == 80.0
 
 
-def test_hvi_com_uniformidade_abaixo_do_minimo_comercial_levanta_erro():
-    with pytest.raises(UniformidadeAbaixoDoMinimo):
-        HVIParametros(
-            micronaire=4.2, comprimento=1.16, resistencia=29.0, uniformidade=76.0
-        )
+def test_hvi_with_uniformity_below_commercial_minimum_raises_error():
+    with pytest.raises(UniformityBelowMinimum):
+        HVIParameters(micronaire=4.2, length=1.16, strength=29.0, uniformity=76.0)

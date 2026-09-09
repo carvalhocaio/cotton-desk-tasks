@@ -1,99 +1,101 @@
-# ADR 001: Django Tasks (com django-tasks-db) em vez de Celery
+# ADR 001: Django Tasks (with django-tasks-db) instead of Celery
 
 ## Status
-Aceito - para fins de aprendizado. Ver seção "Gatilho para revisão" antes de usar em produção.
+Accepted - for learning purposes. See the "Trigger for review" section before using in production.
 
-## Contexto
-O `cotton-desk-tasks` precisava de processamento assíncrono para três tipos de
-trabalho: resumo de laudos (latência importa), relatórios de safra
-(agregação, pode esperar) e confirmação de contratos (precisa esperar o
-commit da transação). As opções consideradas foram o Task Framework nativo
-do Django 6.0 (via `django-tasks-db` como backend de persistência) e Celery.
+## Context
+`cotton-desk-tasks` needed asynchronous processing for three types of
+work: report summarization (latency matters), season reports
+(aggregation, can wait), and contract confirmation (needs to wait for the
+transaction commit). The options considered were Django 6.0's native
+Task Framework (via `django-tasks-db` as the persistence backend) and
+Celery.
 
-## Decisão
-Usamos o Tasks Framework nativo, com `django-tasks-db.DatabaseBackend`.
+## Decision
+We use the native Tasks Framework, with `django-tasks-db.DatabaseBackend`.
 
-## Motivos
-- **Objetivo do projeto era aprender o framework em si** - trocar por Celery descaracterizaria o propósito do repositório.
-- **Zero infraestrutura extra.** `django-tasks-db` usa o mesmo banco Postgres que o resto da aplicação já usa; não precisa de Redis/RabbitMQ rodando em paralelo. Para um projeto de porte pequeno/médio, isso é uma dependência operacional a menos.
-- **API nativa do Django.** `@task`, `.enqueue()`, `TaskResult` - sem decorators de terceiros, sem `celery.py` separado, sem configuração de broker.
+## Reasons
+- **The project's goal was to learn the framework itself** - swapping in Celery would defeat the point of the repository.
+- **Zero extra infrastructure.** `django-tasks-db` uses the same Postgres database the rest of the application already uses; no need to run Redis/RabbitMQ in parallel. For a small/medium project, that's one fewer operational dependency.
+- **Native Django API.** `@task`, `.enqueue()`, `TaskResult` - no third-party decorators, no separate `celery.py`, no broker configuration.
 
-## Trade-offs conhecidos (vividos neste projeto, não hipotéticos)
-- **Sem agendamento embutido**. Celery tem Celery Beat nativo; aqui precisamos de cron externo chamando um management command (`registrar_preco`). Documentado, mas é uma peça a mais para manter.
-- **`django-task-db` é um pacote comunitário**, não faz parte do core do Django - os backends embutidos (`ImmediateBackend`, `DummyBackend`) são explicitamente não recomendados para produção pela documentação oficial. Celery tem décadas de battle-testing em produção; `django-tasks-db` não.
-- **`ImmediateBackend` não suporta `get_result()` por ID** - descoberto testes de "a task roda" (podem usar `ImmediateBackend`) de testes de "consultar status depois" (precisam mockar o `TaskResult` ou, no caso do gotcha do worker real, rodar `DatabaseBackend` com `transaction=True`).
-- **Retry, rate limiting e monitoramento** são bem mais maduros no ecossistema Celery (Flower, retry com backoff configurável.) O Tasks Framework nativo ainda é recente; menos ferramentas de observabilidade prontas.
+## Known trade-offs (lived in this project, not hypothetical)
+- **No built-in scheduling.** Celery has native Celery Beat; here we need an external cron calling a management command (`register_price`). Documented, but it's one more piece to maintain.
+- **`django-tasks-db` is a community package**, not part of Django core - the built-in backends (`ImmediateBackend`, `DummyBackend`) are explicitly not recommended for production by the official docs. Celery has decades of production battle-testing; `django-tasks-db` doesn't.
+- **`ImmediateBackend` doesn't support `get_result()` by ID** - discovered while separating "the task runs" tests (can use `ImmediateBackend`) from "check status afterward" tests (need to mock the `TaskResult` or, in the real-worker gotcha case, run `DatabaseBackend` with `transaction=True`).
+- **Retry, rate limiting, and monitoring** are far more mature in the Celery ecosystem (Flower, retry with configurable backoff). The native Tasks Framework is still recent; fewer ready-made observability tools.
 
-## Gatilho para revisão
-Se este projeto (ou um sucessor dele) for para produção real com volume
-significativo de tasks, ou precisar de agendamento recorrente complexo,
-rety sofisticado, ou monitoramento tipo Flower - reavaliar Celery nesse
-momento, não antes. Trocar de backend agora, sem essas pressões reais, seria otimização prematura.
+## Trigger for review
+If this project (or a successor) goes to real production with significant
+task volume, or needs complex recurring scheduling, sophisticated retry,
+or Flower-style monitoring - reassess Celery at that point, not before.
+Switching backends now, without those real pressures, would be premature
+optimization.
 
 ---
 
-# ADR 002: PydanticAI + Gemini para extração estruturada de confirmações
+# ADR 002: PydanticAI + Gemini for structured extraction of confirmations
 
 ## Status
-Aceito.
+Accepted.
 
-## Contexto
-A fase atual precisava transformar texto livre (uma confirmação de contrato
-recebida por e-mail, por exemplo) em dados estruturados que pudessem criar
-um `Contrato` de verdade. As opções consideradas foram PydanticAI e LangChain
-com saída estruturada via `with_structured_output`.
+## Context
+The current phase needed to turn free text (a contract confirmation
+received by email, for example) into structured data that could create a
+real `Contract`. The options considered were PydanticAI and LangChain
+with structured output via `with_structured_output`.
 
-## Decisão
-Usamos PydanticAI, com `Agent(output_type=DadosConfirmacao, ...)` e o modelo
-`google:gemini-2.5-flash`.
+## Decision
+We use PydanticAI, with `Agent(output_type=ConfirmationData, ...)` and the
+`google:gemini-2.5-flash` model.
 
-## Motivos
-- **A validação de schema é o ponto central do PydanticAI** - o `output_type` é um `BaseModel` do Pydantic, e a lib trata a validação/retry de schema como parte do core, não como um recurso anexado.
-- **`TestModel` + `Agent.override()` tornam o teste determinístico e offline** - nenhum teste da suíte precisa de `GOOGLE_API_KEY` nem toca rede.
+## Reasons
+- **Schema validation is PydanticAI's central point** - `output_type` is a Pydantic `BaseModel`, and the lib treats schema validation/retry as part of the core, not as a bolted-on feature.
+- **`TestModel` + `Agent.override()` make the test deterministic and offline** - no test in the suite needs `GOOGLE_API_KEY` or touches the network.
 
-## Trade-offs conhecidos (vividos neste projeto)
-- **Checagem de API key eager na criação do `Agent`.** Só *importar* o módulo sem `GOOGLE_API_KEY` no ambiente quebraria a suíte inteira, mesmo em testes que nunca chamam a API de verdade. Resolvido com `defer_model_check=True`, mas é uma pegadinha que só apareceu testando, não estava documentada com destaque.
-- **Falha de correspondência (`fardo_codigo` que não existe) é tratada como falha real da task** (`Fardo.DoesNotExist`), não como retry silencioso ou fallback. Isso é proposital — um LLM pode alucinar ou errar o código do fardo, e mascarar isso deixaria o erro passar sem rastro. O custo é que, em produção, cada falha dessas precisas de triagem humana (não há correção automática de código de fardo ainda).
-- **`extrair_confirmacao` compartilha a fila `confirmacoes` com `confirmar_contrato`**, mas com prioridade menor (30 vs 50) — uma chamada de LLM é ordens de magnitude mais lenta que uma leitura de banco. Se o volume de confirmações via IA crescer muito, isso pode competir por worker com as confirmações diretas; nesse ponto, uma fila dedicada (`extracao-ia`) seria a próxima decisão a revisitar.
+## Known trade-offs (lived in this project)
+- **Eager API key check when the `Agent` is created.** Just *importing* the module without `GOOGLE_API_KEY` in the environment would break the entire suite, even in tests that never call the real API. Solved with `defer_model_check=True`, but it's a gotcha that only surfaced during testing, not prominently documented.
+- **Matching failure (a `bale_code` that doesn't exist) is treated as a real task failure** (`Bale.DoesNotExist`), not as a silent retry or fallback. This is intentional — an LLM can hallucinate or get the bale code wrong, and masking that would let the error pass without a trace. The cost is that, in production, every such failure needs human triage (there's no automatic bale code correction yet).
+- **`extract_confirmation` shares the `confirmations` queue with `confirm_contract`**, but with lower priority (30 vs. 50) — an LLM call is orders of magnitude slower than a database read. If the volume of AI-driven confirmations grows a lot, this could compete for workers with direct confirmations; at that point, a dedicated queue (`ai-extraction`) would be the next decision to revisit.
 
-## Gatilho para revisão
-Se o volume de extrações via LLM crescer o suficiente para competir de
-verdade com `confirm_contrato` pela fila `confirmacoes`, separar numa fila
-própria. Se a taxa de `Fardo.DoesNotExists` se mostrar alta, na prática,
-considerar uma etapa de correspondência fuzzy (ex.: sugerir o fardo mais
-próximo) antes de falhar a task.
+## Trigger for review
+If the volume of LLM-driven extractions grows enough to genuinely compete
+with `confirm_contract` for the `confirmations` queue, split it into its
+own queue. If the `Bale.DoesNotExist` rate turns out to be high in
+practice, consider a fuzzy-matching step (e.g. suggesting the closest
+bale) before failing the task.
 
 ---
 
-# ADR 003: Polling simples no painel, em vez de WebSocket
+# ADR 003: Simple polling on the dashboard, instead of WebSocket
 
 ## Status
-Aceito.
+Accepted.
 
-## Contexto
-O painel (`/dashboard/`) precisa refletir a mudança de estado das tasks
-(`READY` -> `RUNNING` -> `SUCCESSFUL`/`FAILED`) sem que o usuário recarregue a
-página. As opções consideradas foram polling via `fetch` periódico,
-Server-Sent Events (SSE) e WebSocket via Django Channels.
+## Context
+The dashboard (`/dashboard/`) needs to reflect task state changes
+(`READY` -> `RUNNING` -> `SUCCESSFUL`/`FAILED`) without the user reloading
+the page. The options considered were periodic `fetch` polling,
+Server-Sent Events (SSE), and WebSocket via Django Channels.
 
-## Decisão
-Polling: o JS do painel chama `GET /dashboard/tasks.json` a cada 1,5s e
-reconcilia os cartões na tela.
+## Decision
+Polling: the dashboard's JS calls `GET /dashboard/tasks.json` every 1.5s
+and reconciles the cards on screen.
 
-## Motivos
-- **Zero infraestrutura adicional.** WebSocket com Channels e exigiria servidor ASGI, a dependência `channels` e uma channel layer (normalmente Redis) - o mesmo tipo de peso operacional que o ADR 001 evitou ao escolher `django-task-db` em vez de Celery. Manter a coerência importa: não faz sentido fugir do Redis no backend de tasks e reintroduzi-lo no painel.
-- **A fonte da verdade já é uma tabela.** O `DatabaseBackend` grava o estado de cada task em `DBTaskResult`. Um poll é literalmente um `SELECT` - não há evento em memória a propagar, o dado está no banco de qualquer jeito.
-- **O escopo do projeto é aprender Django Tasks**, não transporte em tempo real. Complexidade de transporte tiraria o foco do que o painel existe para mostrar.
+## Reasons
+- **Zero additional infrastructure.** WebSocket with Channels would require an ASGI server, the `channels` dependency, and a channel layer (usually Redis) - the same kind of operational weight ADR 001 avoided by choosing `django-tasks-db` over Celery. Staying consistent matters: it wouldn't make sense to avoid Redis in the task backend and reintroduce it in the dashboard.
+- **The source of truth is already a table.** `DatabaseBackend` writes each task's state to `DBTaskResult`. A poll is literally a `SELECT` - there's no in-memory event to propagate, the data is in the database either way.
+- **The project's scope is learning Django Tasks**, not real-time transport. Transport complexity would shift focus away from what the dashboard exists to show.
 
-## Trade-offs conhecidos (vividos neste projeto)
-- **Transições mais curtas que o intervalo de poll são invisíveis.** Sentimos isso, na prática: `resumir_laudo` termina em milissegundos, então o estado `RUNNING` raramente aparece na tela - o cartão salta de `READY` para `SUCCESSUL`/`FAILED`. Só foi possível *ver* o estado `RUNNING` criando a `tarefa_de_demonstracao` (fila `demo`), artificialmente lenta e explicitamente rotulada como tal. Um transporte por evento (SSE/WebSocket) capturaria toda transição, inclusive as instantâneas.
-- **Requisições constantes mesmo com o painel ocioso.** Uma consulta a cada 1,5s por aba aberta, independente de haver trabalho na fila.
-- **Não escala para muitos usuários simultâneos.** Cada navegador aberto gera uma varredura das 50 tasks mais recentes a cada ciclo. Para um painel de demonstração local isso é irrelevante; para um painel operacional de mesa, com vários operadores, não seria.
-- **A flag `--interval` do `db_worker` afeta o que se vê.** Aumentá-la faz as tasks ficarem mais tempo em `READY` (visível), mas não altera a duração da execução em si - descoberta empírica que vale registrar para quem for reproduzir a demonstração.
+## Known trade-offs (lived in this project)
+- **Transitions shorter than the poll interval are invisible.** We felt this in practice: `summarize_report` finishes in milliseconds, so the `RUNNING` state rarely shows on screen - the card jumps straight from `READY` to `SUCCESSFUL`/`FAILED`. It was only possible to *see* the `RUNNING` state by creating `demo_task` (the `demo` queue), artificially slow and explicitly labeled as such. An event-based transport (SSE/WebSocket) would capture every transition, including instant ones.
+- **Constant requests even with an idle dashboard.** One query every 1.5s per open tab, regardless of whether there's work in the queue.
+- **Doesn't scale to many simultaneous users.** Each open browser generates a scan of the 50 most recent tasks every cycle. For a local demo dashboard this is irrelevant; for an operational desk dashboard with several operators, it wouldn't be.
+- **The `db_worker`'s `--interval` flag affects what you see.** Increasing it makes tasks stay longer in `READY` (visible), but doesn't change the execution duration itself - an empirical finding worth recording for anyone reproducing the demo.
 
-## Gatilho para revisão
-Se o painel deixar de ser demonstração e passar a ser ferramenta operacional
-com vários usuários simultâneos, ou se for necessário observar fielmente
-transições curtas, migrar para **SSE antes de WebSocket** — o fluxo é
-unidirecional (servidor → navegador), então o full-duplex do WebSocket seria
-capacidade não utilizada, com custo de infraestrutura maior.
+## Trigger for review
+If the dashboard stops being a demo and becomes an operational tool with
+several simultaneous users, or if faithfully observing short transitions
+becomes necessary, migrate to **SSE before WebSocket** — the flow is
+unidirectional (server → browser), so WebSocket's full-duplex capability
+would go unused, at a higher infrastructure cost.

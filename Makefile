@@ -1,40 +1,40 @@
 .PHONY: help install migrate run worker test lint lint-fix format format-check audit ci clean
 
-help: ## Lista os comandos disponíveis
+help: ## Lists the available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-install: ## Instala as dependências do projeto (incluindo dev)
+install: ## Installs the project dependencies (including dev)
 	uv sync
 
-migrate: ## Aplica as migrações do Django
+migrate: ## Applies the Django migrations
 	uv run python manage.py migrate
 
-run: ## Roda o servidor de desenvolvimento
+run: ## Runs the development server
 	uv run python manage.py runserver
 
-worker: ## Roda o worker que processa as filas de tasks
+worker: ## Runs the worker that processes the task queues
 	uv run python manage.py db_worker
 
-test: ## Roda a suíte de testes
+test: ## Runs the test suite
 	uv run pytest
 
-lint: ## Verifica o código com ruff
+lint: ## Checks the code with ruff
 	uv run ruff check
 
-lint-fix: ## Verifica e corrige automaticamente com ruff
+lint-fix: ## Checks and automatically fixes with ruff
 	uv run ruff check --fix
 
-format: ## Formata o código com ruff
+format: ## Formats the code with ruff
 	uv run ruff format
 
-format-check: ## Verifica a formatação sem alterar arquivos
+format-check: ## Checks formatting without modifying files
 	uv run ruff format --check
 
-audit: ## Audita dependências em busca de vulnerabilidades
+audit: ## Audits dependencies for vulnerabilities
 	uv run pip-audit
 
-ci: lint format-check audit test ## Roda o mesmo pipeline da CI localmente
+ci: lint format-check audit test ## Runs the same pipeline as CI locally
 
-clean: ## Remove caches (.ruff_cache, .pytest_cache, __pycache__)
+clean: ## Removes caches (.ruff_cache, .pytest_cache, __pycache__)
 	rm -rf .ruff_cache .pytest_cache
 	find . -type d -name '__pycache__' -exec rm -rf {} +

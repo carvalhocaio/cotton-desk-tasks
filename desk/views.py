@@ -10,173 +10,171 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 from django_tasks_db.models import DBTaskResult
 
-from desk.models import Contrato, Fardo, LaudoHVI
+from desk.models import Bale, Contract, HVIReport
 from desk.tasks import (
-    confirmar_contrato,
-    gerar_relatorio_safra,
-    registrar_leitura_indice,
-    tarefa_de_demonstracao,
+    confirm_contract,
+    demo_task,
+    generate_season_report,
+    record_index_reading,
 )
-from desk.tasks import resumir_laudo as tarefa_resumir_laudo
+from desk.tasks import summarize_report as summarize_report_task
 
 
 @csrf_exempt
 @require_POST
-def resumir_laudo(request, laudo_id):
-    """Enfileira o resumo de um laudo HVI e devolve o id da task."""
-    resultado = tarefa_resumir_laudo.enqueue(laudo_id)
-    return JsonResponse({"task_id": str(resultado.id)}, status=202)
+def summarize_report(request, report_id):
+    """Enqueues the summary of an HVI report and returns the task id."""
+    result = summarize_report_task.enqueue(report_id)
+    return JsonResponse({"task_id": str(result.id)}, status=202)
 
 
 @require_GET
-def status_da_task(request, task_id):
-    """Consulta o status de uma task já enfileirada."""
-    resultado = default_task_backend.get_result(task_id)
-    resultado.refresh()
+def task_status(request, task_id):
+    """Checks the status of an already-enqueued task."""
+    result = default_task_backend.get_result(task_id)
+    result.refresh()
 
-    if resultado.status == TaskResultStatus.SUCCESSFUL:
-        return JsonResponse(
-            {"status": "concluida", "resultado": resultado.return_value}
-        )
+    if result.status == TaskResultStatus.SUCCESSFUL:
+        return JsonResponse({"status": "completed", "result": result.return_value})
 
-    if resultado.status == TaskResultStatus.FAILED:
-        erro = resultado.errors[0].exception_class_path
-        return JsonResponse({"status": "falhou", "erro": erro}, status=422)
+    if result.status == TaskResultStatus.FAILED:
+        error = result.errors[0].exception_class_path
+        return JsonResponse({"status": "failed", "error": error}, status=422)
 
-    return JsonResponse({"status": "pendente"})
+    return JsonResponse({"status": "pending"})
 
 
-def _fechar_contrato(fardo, comprador, preco_por_kg):
-    """Cria o contrato e agenda a confirmação para depois do commit.
+def _close_contract(bale, buyer, price_per_kg):
+    """Creates the contract and schedules the confirmation for after the commit.
 
-    Compartilhado entre a view `checkout` (fluxo real) e `contrato_teste`
-    (botão de demonstração do painel).
+    Shared between the `checkout` view (real flow) and `demo_contract`
+    (dashboard demo button).
     """
     with transaction.atomic():
-        contrato = Contrato.objects.create(
-            fardo=fardo, comprador=comprador, preco_por_kg=preco_por_kg
+        contract = Contract.objects.create(
+            bale=bale, buyer=buyer, price_per_kg=price_per_kg
         )
-        transaction.on_commit(partial(confirmar_contrato.enqueue, contrato.id))
-    return contrato
+        transaction.on_commit(partial(confirm_contract.enqueue, contract.id))
+    return contract
 
 
 @csrf_exempt
 @require_POST
 def checkout(request):
-    """Fecha um contrato e agenda a confirmação para depois do commit."""
-    fardo = Fardo.objects.get(pk=request.POST["fardo_id"])
-    contrato = _fechar_contrato(
-        fardo, request.POST["comprador"], request.POST["preco_por_kg"]
+    """Closes a contract and schedules the confirmation for after the commit."""
+    bale = Bale.objects.get(pk=request.POST["bale_id"])
+    contract = _close_contract(
+        bale, request.POST["buyer"], request.POST["price_per_kg"]
     )
-    return JsonResponse({"contrato_id": contrato.id}, status=201)
+    return JsonResponse({"contract_id": contract.id}, status=201)
 
 
 @csrf_exempt
 @require_POST
-def upload_lote_laudos(request):
-    """Recebe um CSV de laudos HVI, persiste cada linha e enfileira o resumo.
+def upload_report_batch(request):
+    """Receives a CSV of HVI reports, persists each row, and enqueues the summary.
 
-    Atalho de demonstração: usa `get_or_create` por código de fardo para que
-    o mesmo CSV possa ser reenviado em testes manuais sem estourar por
-    unicidade — não é a regra real de deduplicação de fardo.
+    Demo shortcut: uses `get_or_create` by bale code so the same CSV can be
+    resubmitted in manual tests without hitting a uniqueness error — this
+    is not the real bale deduplication rule.
     """
-    arquivo = request.FILES["arquivo"]
-    texto = io.TextIOWrapper(arquivo.file, encoding="utf-8")
-    leitor = csv.DictReader(texto)
+    uploaded_file = request.FILES["file"]
+    text = io.TextIOWrapper(uploaded_file.file, encoding="utf-8")
+    reader = csv.DictReader(text)
 
     task_ids = []
-    criados = 0
-    for linha in leitor:
-        fardo, _fardo_criado = Fardo.objects.get_or_create(
-            codigo=linha["codigo"],
+    created = 0
+    for row in reader:
+        bale, _bale_created = Bale.objects.get_or_create(
+            code=row["code"],
             defaults={
-                "safra": linha["safra"],
-                "produtor": linha["produtor"],
-                "peso_kg": linha["peso_kg"],
-                "data_classificacao": linha["data_classificacao"],
+                "season": row["season"],
+                "producer": row["producer"],
+                "weight_kg": row["weight_kg"],
+                "classification_date": row["classification_date"],
             },
         )
-        laudo = LaudoHVI.objects.create(
-            fardo=fardo,
-            micronaire=linha["micronaire"],
-            comprimento=linha["comprimento"],
-            resistencia=linha["resistencia"],
-            uniformidade=linha["uniformidade"],
+        report = HVIReport.objects.create(
+            bale=bale,
+            micronaire=row["micronaire"],
+            length=row["length"],
+            strength=row["strength"],
+            uniformity=row["uniformity"],
         )
-        resultado = tarefa_resumir_laudo.enqueue(laudo.id)
-        task_ids.append(str(resultado.id))
-        criados += 1
+        result = summarize_report_task.enqueue(report.id)
+        task_ids.append(str(result.id))
+        created += 1
 
-    return JsonResponse({"criados": criados, "task_ids": task_ids}, status=202)
+    return JsonResponse({"created": created, "task_ids": task_ids}, status=202)
 
 
 @require_GET
 def tasks_json(request):
-    """Lista as tasks mais recentes por fila, para o dashboard consumir via polling."""
+    """Lists the most recent tasks per queue, for the dashboard to consume via polling."""
     tasks = DBTaskResult.objects.order_by("-enqueued_at")[:50]
-    dados = [
+    data = [
         {
             "id": str(t.id),
-            "fila": t.queue_name,
-            "tarefa": t.task_path.rsplit(".", 1)[-1],
+            "queue": t.queue_name,
+            "task": t.task_path.rsplit(".", 1)[-1],
             "status": t.status,
-            "erro": t.exception_class_path.rsplit(".", 1)[-1] or None,
-            "enfileirada_em": t.enqueued_at.isoformat() if t.enqueued_at else None,
-            "iniciada_em": t.started_at.isoformat() if t.started_at else None,
-            "finalizada_em": t.finished_at.isoformat() if t.finished_at else None,
+            "error": t.exception_class_path.rsplit(".", 1)[-1] or None,
+            "enqueued_at": t.enqueued_at.isoformat() if t.enqueued_at else None,
+            "started_at": t.started_at.isoformat() if t.started_at else None,
+            "finished_at": t.finished_at.isoformat() if t.finished_at else None,
         }
         for t in tasks
     ]
-    return JsonResponse({"tasks": dados})
+    return JsonResponse({"tasks": data})
 
 
 @csrf_exempt
 @require_POST
-def limpar_tasks(request):
-    """Remove todo o histórico de tasks — atalho de demonstração para reiniciar o painel."""
-    removidas, _detalhes = DBTaskResult.objects.all().delete()
-    return JsonResponse({"removidas": removidas})
+def clear_tasks(request):
+    """Removes the entire task history — demo shortcut to reset the dashboard."""
+    removed, _details = DBTaskResult.objects.all().delete()
+    return JsonResponse({"removed": removed})
 
 
 @csrf_exempt
 @require_POST
-def relatorio_teste(request):
-    """Botão de demonstração: enfileira um relatório de safra."""
-    safra = request.POST.get("safra", "2025/2026")
-    resultado = gerar_relatorio_safra.enqueue(safra)
-    return JsonResponse({"task_id": str(resultado.id)}, status=202)
+def demo_report(request):
+    """Demo button: enqueues a season report."""
+    season = request.POST.get("season", "2025/2026")
+    result = generate_season_report.enqueue(season)
+    return JsonResponse({"task_id": str(result.id)}, status=202)
 
 
 @csrf_exempt
 @require_POST
-def preco_teste(request):
-    """Botão de demonstração: enfileira uma leitura de índice de preço."""
-    resultado = registrar_leitura_indice.enqueue("ICE-CT2", "82.35", "2026-04-28")
-    return JsonResponse({"task_id": str(resultado.id)}, status=202)
+def demo_price(request):
+    """Demo button: enqueues a price index reading."""
+    result = record_index_reading.enqueue("ICE-CT2", "82.35", "2026-04-28")
+    return JsonResponse({"task_id": str(result.id)}, status=202)
 
 
 @csrf_exempt
 @require_POST
-def contrato_teste(request):
-    """Botão de demonstração: fecha um contrato usando o fardo mais recente."""
-    fardo = Fardo.objects.order_by("-id").first()
-    if fardo is None:
+def demo_contract(request):
+    """Demo button: closes a contract using the most recent bale."""
+    bale = Bale.objects.order_by("-id").first()
+    if bale is None:
         return JsonResponse(
-            {"erro": "nenhum fardo cadastrado — suba um lote de laudos primeiro"},
+            {"error": "no bale registered — upload a report batch first"},
             status=409,
         )
-    contrato = _fechar_contrato(fardo, "Têxtil Demonstração", "6.85")
-    return JsonResponse({"contrato_id": contrato.id}, status=201)
+    contract = _close_contract(bale, "Demo Textile", "6.85")
+    return JsonResponse({"contract_id": contract.id}, status=201)
 
 
 @csrf_exempt
 @require_POST
-def demo_lenta(request):
-    """Botão de demonstração: enfileira a task artificialmente lenta."""
-    resultado = tarefa_de_demonstracao.enqueue()
-    return JsonResponse({"task_id": str(resultado.id)}, status=202)
+def demo_slow(request):
+    """Demo button: enqueues the artificially slow task."""
+    result = demo_task.enqueue()
+    return JsonResponse({"task_id": str(result.id)}, status=202)
 
 
 def dashboard(request):
-    """Renderiza o painel visual das filas — apresentação pura, sem lógica de negócio."""
+    """Renders the queue dashboard — pure presentation, no business logic."""
     return render(request, "desk/dashboard.html")

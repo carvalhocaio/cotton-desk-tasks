@@ -3,95 +3,93 @@ from decimal import Decimal
 
 from django.tasks import task
 
-from desk.domain import ParametroHVIInvalido
-from desk.extracao import extrair_dados_confirmacao
-from desk.models import Contrato, Fardo, IndicePreco, LaudoHVI
+from desk.domain import InvalidHVIParameter
+from desk.extraction import extract_confirmation_data
+from desk.models import Bale, Contract, HVIReport, PriceIndex
 
 
-@task(queue_name="laudos", priority=50)
-def resumir_laudo(laudo_id: int) -> str:
-    """Resume um laudo HVI a partir dos parâmetros de domínio validados."""
-    laudo = LaudoHVI.objects.get(pk=laudo_id)
-    parametros = laudo.to_dominio()
+@task(queue_name="hvi_reports", priority=50)
+def summarize_report(report_id: int) -> str:
+    """Summarizes an HVI report from its validated domain parameters."""
+    report = HVIReport.objects.get(pk=report_id)
+    parameters = report.to_domain()
     return (
-        f"Fardo {laudo.fardo.codigo}: micronaire {parametros.micronaire}, "
-        f'comprimento {parametros.comprimento}", '
-        f"resistência {parametros.resistencia} gf/tex, "
-        f"uniformidade {parametros.uniformidade}%"
+        f"Bale {report.bale.code}: micronaire {parameters.micronaire}, "
+        f'length {parameters.length}", '
+        f"strength {parameters.strength} gf/tex, "
+        f"uniformity {parameters.uniformity}%"
     )
 
 
-@task(queue_name="relatorios", priority=-10)
-def gerar_relatorio_safra(safra: str) -> str:
-    """Consolida quantos laudos de uma safra são comercialmente válidos."""
-    laudos = LaudoHVI.objects.filter(fardo__safra=safra)
-    total = laudos.count()
-    validos = 0
-    invalidos = 0
-    for laudo in laudos:
+@task(queue_name="season_reports", priority=-10)
+def generate_season_report(season: str) -> str:
+    """Consolidates how many reports from a season are commercially valid."""
+    reports = HVIReport.objects.filter(bale__season=season)
+    total = reports.count()
+    valid = 0
+    invalid = 0
+    for report in reports:
         try:
-            laudo.to_dominio()
-            validos += 1
-        except ParametroHVIInvalido:
-            invalidos += 1
+            report.to_domain()
+            valid += 1
+        except InvalidHVIParameter:
+            invalid += 1
+    return f"Season {season}: {total} report(s), {valid} valid, {invalid} invalid"
+
+
+@task(queue_name="confirmations", priority=50)
+def confirm_contract(contract_id: int) -> str:
+    """Generates the textual confirmation of a newly closed contract."""
+    contract = Contract.objects.select_related("bale").get(pk=contract_id)
     return (
-        f"Safra {safra}: {total} laudos, {validos} válido(s), {invalidos} inválido(s)"
+        f"Contract for bale {contract.bale.code} confirmed with "
+        f"{contract.buyer} at R$ {contract.price_per_kg}/kg"
     )
 
 
-@task(queue_name="confirmacoes", priority=50)
-def confirmar_contrato(contrato_id: int) -> str:
-    """Gera a confirmação textual de um contrato recém-fechado."""
-    contrato = Contrato.objects.select_related("fardo").get(pk=contrato_id)
-    return (
-        f"Contrato do fardo {contrato.fardo.codigo} confirmado com "
-        f"{contrato.comprador} a R$ {contrato.preco_por_kg}/kg"
-    )
+@task(queue_name="prices", priority=0)
+def record_index_reading(code: str, value: str, trading_date: str) -> str:
+    """Persists a price index reading.
 
-
-@task(queue_name="precos", priority=0)
-def registrar_leitura_indice(codigo: str, valor: str, data_pregao: str) -> str:
-    """Persiste uma leitura de índice de preço.
-
-    `valor` chega como string, não Decimal: argumentos de task passam por
-    serialização JSON no `.enqueue()`, e Decimal não sobrevive a esse
-    round-trip — quem chama essa task precisa converter antes.
+    `value` arrives as a string, not Decimal: task arguments go through
+    JSON serialization in `.enqueue()`, and Decimal doesn't survive that
+    round-trip — the caller needs to convert it before calling this task.
     """
-    leitura, _criada = IndicePreco.objects.update_or_create(
-        codigo=codigo,
-        data_pregao=data_pregao,
-        defaults={"valor": Decimal(valor)},
+    reading, _created = PriceIndex.objects.update_or_create(
+        code=code,
+        trading_date=trading_date,
+        defaults={"value": Decimal(value)},
     )
-    return f"{leitura.codigo} em {leitura.data_pregao}: R$ {leitura.valor}"
+    return f"{reading.code} on {reading.trading_date}: R$ {reading.value}"
 
 
-@task(queue_name="confirmacoes", priority=30)
-def extrair_confirmacao(texto: str) -> str:
-    """Extrai dados de um texto livre, cria o Contrato e agenda a confirmação formal.
+@task(queue_name="confirmations", priority=30)
+def extract_confirmation(text: str) -> str:
+    """Extracts data from free text, creates the Contract, and schedules the formal confirmation.
 
-    Se o fardo citado no texto não existir na base, a task falha com
-    `Fardo.DoesNotExist` — um LLM pode alucinar ou errar o código, e isso
-    deve aparecer como falha real, não ser engolido silenciosamente.
+    If the bale mentioned in the text doesn't exist, the task fails with
+    `Bale.DoesNotExist` — an LLM can hallucinate or get the code wrong, and
+    this must show up as a real failure, not be swallowed silently.
     """
-    dados = extrair_dados_confirmacao(texto)
-    fardo = Fardo.objects.get(codigo=dados.fardo_codigo)
-    contrato = Contrato.objects.create(
-        fardo=fardo,
-        comprador=dados.comprador,
-        preco_por_kg=Decimal(dados.preco_por_kg),
+    data = extract_confirmation_data(text)
+    bale = Bale.objects.get(code=data.bale_code)
+    contract = Contract.objects.create(
+        bale=bale,
+        buyer=data.buyer,
+        price_per_kg=Decimal(data.price_per_kg),
     )
-    confirmar_contrato.enqueue(contrato.id)
-    return f"Contrato {contrato.id} criado: fardo {fardo.codigo}, comprador {contrato.comprador}"
+    confirm_contract.enqueue(contract.id)
+    return f"Contract {contract.id} created: bale {bale.code}, buyer {contract.buyer}"
 
 
 @task(queue_name="demo", priority=0)
-def tarefa_de_demonstracao() -> str:
-    """Task artificialmente lenta, só para o painel exibir o estado 'executando'.
+def demo_task() -> str:
+    """Artificially slow task, just so the dashboard can show the 'running' state.
 
-    O `sleep` aqui é intencional e honesto: simular latência É a função desta
-    task. Ela não tem papel no negócio — existe apenas para tornar visível no
-    dashboard a transição READY → RUNNING → SUCCESSFUL, que nas tasks reais
-    (rápidas) acontece rápido demais para o olho acompanhar.
+    The `sleep` here is intentional and honest: simulating latency IS this
+    task's purpose. It plays no business role — it exists only to make the
+    READY → RUNNING → SUCCESSFUL transition visible on the dashboard, which
+    happens too fast to see with the real (fast) tasks.
     """
     time.sleep(4)
-    return "demonstração concluída após 4s de execução simulada"
+    return "demo completed after 4s of simulated execution"

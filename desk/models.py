@@ -1,70 +1,70 @@
 from django.db import models
 
-from desk.domain import HVIParametros
+from desk.domain import HVIParameters
 
 
-class Fardo(models.Model):
-    """Um fardo físico de algodão, identificado e rastreável desde o beneficiamento."""
+class Bale(models.Model):
+    """A physical cotton bale, identified and traceable from ginning onward."""
 
-    codigo = models.CharField(max_length=20, unique=True)
-    safra = models.CharField(max_length=9)  # ex.: "2025/2026"
-    produtor = models.CharField(max_length=120)
-    peso_kg = models.DecimalField(max_digits=6, decimal_places=2)
-    data_classificacao = models.DateField()
+    code = models.CharField(max_length=20, unique=True)
+    season = models.CharField(max_length=9)  # e.g.: "2025/2026"
+    producer = models.CharField(max_length=120)
+    weight_kg = models.DecimalField(max_digits=6, decimal_places=2)
+    classification_date = models.DateField()
 
     def __str__(self) -> str:
-        return f"Fardo {self.codigo} ({self.safra})"
+        return f"Bale {self.code} ({self.season})"
 
 
-class LaudoHVI(models.Model):
-    """Laudo de classificação HVI emitido pelo laboratório para um fardo.
+class HVIReport(models.Model):
+    """HVI classification report issued by the lab for a bale.
 
-    O laudo é salvo como o laboratório o emitiu, mesmo que os valores
-    estejam fora da faixa comercial — a validação de negócio só acontece
-    ao converter para `HVIParametros` via `to_dominio()`.
+    The report is saved as the lab issued it, even if the values are
+    outside the commercial range — business validation only happens when
+    converting to `HVIParameters` via `to_domain()`.
     """
 
-    fardo = models.ForeignKey(Fardo, on_delete=models.CASCADE, related_name="laudos")
+    bale = models.ForeignKey(Bale, on_delete=models.CASCADE, related_name="reports")
     micronaire = models.DecimalField(max_digits=3, decimal_places=2)
-    comprimento = models.DecimalField(max_digits=4, decimal_places=2)
-    resistencia = models.DecimalField(max_digits=4, decimal_places=1)
-    uniformidade = models.DecimalField(max_digits=4, decimal_places=1)
-    data_emissao = models.DateField(auto_now_add=True)
+    length = models.DecimalField(max_digits=4, decimal_places=2)
+    strength = models.DecimalField(max_digits=4, decimal_places=1)
+    uniformity = models.DecimalField(max_digits=4, decimal_places=1)
+    issue_date = models.DateField(auto_now_add=True)
 
     def __str__(self) -> str:
-        return f"Laudo HVI do fardo {self.fardo.codigo}"
+        return f"HVI report for bale {self.bale.code}"
 
-    def to_dominio(self) -> HVIParametros:
-        """Converte os campos brutos do banco no value object de domínio validado."""
-        return HVIParametros(
+    def to_domain(self) -> HVIParameters:
+        """Converts the raw database fields into the validated domain value object."""
+        return HVIParameters(
             micronaire=float(self.micronaire),
-            comprimento=float(self.comprimento),
-            resistencia=float(self.resistencia),
-            uniformidade=float(self.uniformidade),
+            length=float(self.length),
+            strength=float(self.strength),
+            uniformity=float(self.uniformity),
         )
 
 
-class Contrato(models.Model):
-    """Contrato de venda de um fardo para um comprador."""
+class Contract(models.Model):
+    """Sale contract for a bale to a buyer."""
 
-    fardo = models.ForeignKey(Fardo, on_delete=models.CASCADE, related_name="contratos")
-    comprador = models.CharField(max_length=120)
-    preco_por_kg = models.DecimalField(max_digits=6, decimal_places=2)
-    data_fechamento = models.DateField(auto_now_add=True)
+    bale = models.ForeignKey(Bale, on_delete=models.CASCADE, related_name="contracts")
+    buyer = models.CharField(max_length=120)
+    price_per_kg = models.DecimalField(max_digits=6, decimal_places=2)
+    closing_date = models.DateField(auto_now_add=True)
 
     def __str__(self) -> str:
-        return f"Contrato do fardo {self.fardo.codigo} com {self.comprador}"
+        return f"Contract for bale {self.bale.code} with {self.buyer}"
 
 
-class IndicePreco(models.Model):
-    """Leitura diária de um índice de preço de referência do algodão."""
+class PriceIndex(models.Model):
+    """Daily reading of a cotton reference price index."""
 
-    codigo = models.CharField(max_length=20)  # ex.: "ICE-CT2", "CEPEA-8DIAS"
-    valor = models.DecimalField(max_digits=8, decimal_places=2)
-    data_pregao = models.DateField()
+    code = models.CharField(max_length=20)  # e.g.: "ICE-CT2", "CEPEA-8DAYS"
+    value = models.DecimalField(max_digits=8, decimal_places=2)
+    trading_date = models.DateField()
 
     class Meta:
-        unique_together = ("codigo", "data_pregao")
+        unique_together = ("code", "trading_date")
 
     def __str__(self) -> str:
-        return f"{self.codigo} em {self.data_pregao}: {self.valor}"
+        return f"{self.code} on {self.trading_date}: {self.value}"

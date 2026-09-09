@@ -1,23 +1,30 @@
 import pytest
 from django.test import override_settings
 
-from desk.models import Fardo
+from desk.models import Bale
 
 
 @pytest.fixture(autouse=True)
 def task_immediate_backend():
-    """Força o ImmediateBackend durante os testes.
+    """Forces the ImmediateBackend during tests.
 
-    Em produção o backend é DatabaseBackend, que exige um
-    processo `db_worker` ativo para processar a fila. Testes automatizados
-    não devem depender de um worker externo rodando em paralelo - por isso
-    a suíte roda as tasks in-line, independente do backend de produção.
+    In production the backend is DatabaseBackend, which requires an
+    active `db_worker` process to process the queue. Automated tests
+    shouldn't depend on an external worker running in parallel - that's
+    why the suite runs tasks inline, regardless of the production
+    backend.
     """
     with override_settings(
         TASKS={
             "default": {
                 "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
-                "QUEUES": ["laudos", "relatorios", "confirmacoes", "precos", "demo"],
+                "QUEUES": [
+                    "hvi_reports",
+                    "season_reports",
+                    "confirmations",
+                    "prices",
+                    "demo",
+                ],
             }
         }
     ):
@@ -25,11 +32,11 @@ def task_immediate_backend():
 
 
 @pytest.fixture
-def fardo():
-    return Fardo.objects.create(
-        codigo="BR2026000500",
-        safra="2025/2026",
-        produtor="Fazenda Bom Futuro",
-        peso_kg="217.00",
-        data_classificacao="2026-03-22",
+def bale():
+    return Bale.objects.create(
+        code="BR2026000500",
+        season="2025/2026",
+        producer="Bom Futuro Farm",
+        weight_kg="217.00",
+        classification_date="2026-03-22",
     )

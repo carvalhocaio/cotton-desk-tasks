@@ -3,15 +3,21 @@ from django.urls import path
 from desk import views
 
 urlpatterns = [
-    path("laudos/<int:laudo_id>/resumir/", views.resumir_laudo, name="resumir_laudo"),
-    path("tasks/<str:task_id>/", views.status_da_task, name="status_da_task"),
+    path(
+        "reports/<int:report_id>/summarize/",
+        views.summarize_report,
+        name="summarize_report",
+    ),
+    path("tasks/<str:task_id>/", views.task_status, name="task_status"),
     path("checkout/", views.checkout, name="checkout"),
-    path("laudos/upload-lote/", views.upload_lote_laudos, name="upload_lote_laudos"),
+    path(
+        "reports/upload-batch/", views.upload_report_batch, name="upload_report_batch"
+    ),
     path("dashboard/tasks.json", views.tasks_json, name="tasks_json"),
-    path("dashboard/limpar/", views.limpar_tasks, name="limpar_tasks"),
-    path("dashboard/relatorio-teste/", views.relatorio_teste, name="relatorio_teste"),
-    path("dashboard/preco-teste/", views.preco_teste, name="preco_teste"),
-    path("dashboard/contrato-teste/", views.contrato_teste, name="contrato_teste"),
-    path("dashboard/demo-lenta/", views.demo_lenta, name="demo_lenta"),
+    path("dashboard/clear/", views.clear_tasks, name="clear_tasks"),
+    path("dashboard/demo-report/", views.demo_report, name="demo_report"),
+    path("dashboard/demo-price/", views.demo_price, name="demo_price"),
+    path("dashboard/demo-contract/", views.demo_contract, name="demo_contract"),
+    path("dashboard/demo-slow/", views.demo_slow, name="demo_slow"),
     path("dashboard/", views.dashboard, name="dashboard"),
 ]
