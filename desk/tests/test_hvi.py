@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from desk.domain import (
@@ -9,46 +11,86 @@ from desk.domain import (
 )
 
 
+def parameters(**overrides):
+    """A commercially valid reading, with individual fields overridable."""
+    values = {
+        "micronaire": Decimal("4.2"),
+        "length": Decimal("1.16"),
+        "strength": Decimal("29.0"),
+        "uniformity": Decimal("82.0"),
+    }
+    return HVIParameters(**{**values, **overrides})
+
+
 def test_hvi_with_micronaire_within_range_is_valid():
-    hvi = HVIParameters(micronaire=4.2, length=1.16, strength=29.0, uniformity=82.0)
-    assert hvi.micronaire == 4.2
+    assert parameters().micronaire == Decimal("4.2")
 
 
 def test_hvi_with_micronaire_below_range_raises_error():
     with pytest.raises(MicronaireOutOfRange):
-        HVIParameters(micronaire=2.0, length=1.16, strength=29.0, uniformity=82.0)
+        parameters(micronaire=Decimal("2.0"))
 
 
 def test_hvi_with_micronaire_above_range_raises_error():
     with pytest.raises(MicronaireOutOfRange):
-        HVIParameters(micronaire=7.5, length=1.16, strength=29.0, uniformity=82.0)
+        parameters(micronaire=Decimal("7.5"))
 
 
 def test_hvi_with_length_at_commercial_minimum_is_valid():
-    hvi = HVIParameters(micronaire=4.2, length=1.11, strength=29.0, uniformity=82.0)
-    assert hvi.length == 1.11
+    assert parameters(length=Decimal("1.11")).length == Decimal("1.11")
 
 
 def test_hvi_with_length_below_commercial_minimum_raises_error():
     with pytest.raises(LengthBelowMinimum):
-        HVIParameters(micronaire=4.2, length=1.05, strength=29.0, uniformity=82.0)
+        parameters(length=Decimal("1.05"))
 
 
 def test_hvi_with_strength_at_commercial_minimum_is_valid():
-    hvi = HVIParameters(micronaire=4.2, length=1.16, strength=28.0, uniformity=82.0)
-    assert hvi.strength == 28.0
+    assert parameters(strength=Decimal("28.0")).strength == Decimal("28.0")
 
 
 def test_hvi_with_strength_below_commercial_minimum_raises_error():
     with pytest.raises(StrengthBelowMinimum):
-        HVIParameters(micronaire=4.2, length=1.16, strength=24.0, uniformity=82.0)
+        parameters(strength=Decimal("24.0"))
 
 
 def test_hvi_with_uniformity_at_commercial_minimum_is_valid():
-    hvi = HVIParameters(micronaire=4.2, length=1.16, strength=29.0, uniformity=80.0)
-    assert hvi.uniformity == 80.0
+    assert parameters(uniformity=Decimal("80.0")).uniformity == Decimal("80.0")
 
 
 def test_hvi_with_uniformity_below_commercial_minimum_raises_error():
     with pytest.raises(UniformityBelowMinimum):
-        HVIParameters(micronaire=4.2, length=1.16, strength=29.0, uniformity=76.0)
+        parameters(uniformity=Decimal("76.0"))
+
+
+def test_hvi_at_the_exact_upper_micronaire_bound_is_valid():
+    """4.9 is marketable; the check is inclusive on both ends."""
+    assert parameters(micronaire=Decimal("4.90")).micronaire == Decimal("4.9")
+
+
+def test_hvi_just_past_the_upper_micronaire_bound_raises_error():
+    with pytest.raises(MicronaireOutOfRange):
+        parameters(micronaire=Decimal("4.91"))
+
+
+@pytest.mark.parametrize(
+    "reading", [Decimal("4.2"), "4.2", 4.2], ids=["decimal", "str", "float"]
+)
+def test_readings_are_normalized_to_exact_decimal(reading):
+    """A CSV string and a float both land on the same exact Decimal.
+
+    The float case matters: Decimal(4.2) would keep the binary expansion,
+    so the domain routes floats through str() instead.
+    """
+    hvi = parameters(micronaire=reading)
+
+    assert hvi.micronaire == Decimal("4.2")
+    assert isinstance(hvi.micronaire, Decimal)
+
+
+def test_readings_keep_the_precision_the_lab_reported():
+    """Decimal("4.20") equals 4.2 but still renders the trailing zero."""
+    hvi = parameters(micronaire=Decimal("4.20"))
+
+    assert hvi.micronaire == Decimal("4.2")
+    assert str(hvi.micronaire) == "4.20"

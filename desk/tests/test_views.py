@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.tasks import TaskResultStatus
-from django.tasks.exceptions import TaskResultDoesNotExist
 from django.urls import reverse
 
 from desk.models import HVIReport
@@ -49,11 +48,20 @@ def test_get_task_status_with_invalid_report_returns_failed(client):
     assert "MicronaireOutOfRange" in body["error"]
 
 
-def test_get_task_status_with_unknown_id_returns_404(client):
-    with patch(
-        "desk.views.default_task_backend.get_result",
-        side_effect=TaskResultDoesNotExist,
-    ):
-        response = client.get(reverse("task_status", args=["any-id"]))
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "task_id",
+    ["00000000-0000-0000-0000-000000000000", "not-a-uuid"],
+    ids=["absent", "malformed"],
+)
+def test_get_task_status_with_unknown_id_returns_404(client, database_backend, task_id):
+    """Deliberately unmocked.
+
+    django-tasks-db raises django_tasks.exceptions.TaskResultDoesNotExist,
+    a different class from Django's same-named one. A mocked backend would
+    happily raise whichever class the test picked and prove nothing about
+    what the real one does.
+    """
+    response = client.get(reverse("task_status", args=[task_id]))
 
     assert response.status_code == 404

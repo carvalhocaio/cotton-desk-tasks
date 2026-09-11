@@ -69,6 +69,7 @@ in practice and the concrete trigger that would justify revisiting it.
 │   ├── domain.py                    # HVIParameters — business validation, no Django
 │   ├── tasks.py                     # async tasks (@task), one per queue
 │   ├── extraction.py                # PydanticAI agent for confirmation extraction
+│   ├── task_feed.py                 # adapter over django-tasks-db's storage model
 │   ├── views.py                     # HTTP endpoints + dashboard
 │   ├── urls.py
 │   ├── templates/desk/dashboard.html

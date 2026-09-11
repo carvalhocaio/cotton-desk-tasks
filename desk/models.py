@@ -35,12 +35,16 @@ class HVIReport(models.Model):
         return f"HVI report for bale {self.bale.code}"
 
     def to_domain(self) -> HVIParameters:
-        """Converts the raw database fields into the validated domain value object."""
+        """Converts the raw database fields into the validated domain value object.
+
+        The fields are already `Decimal`, so nothing is converted on the way
+        in — the reading the lab issued is the reading the domain validates.
+        """
         return HVIParameters(
-            micronaire=float(self.micronaire),
-            length=float(self.length),
-            strength=float(self.strength),
-            uniformity=float(self.uniformity),
+            micronaire=self.micronaire,
+            length=self.length,
+            strength=self.strength,
+            uniformity=self.uniformity,
         )
 
 

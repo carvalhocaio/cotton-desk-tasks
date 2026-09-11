@@ -1,6 +1,5 @@
 import pytest
 from django.core.management import call_command
-from django.test import override_settings
 from django.urls import reverse
 
 from desk.models import HVIReport
@@ -8,7 +7,7 @@ from desk.tasks import summarize_report
 
 
 @pytest.mark.django_db
-def test_tasks_json_lists_recent_tasks_per_queue(client, bale):
+def test_tasks_json_lists_recent_tasks_per_queue(client, bale, database_backend):
     report = HVIReport.objects.create(
         bale=bale,
         micronaire="4.20",
@@ -17,22 +16,8 @@ def test_tasks_json_lists_recent_tasks_per_queue(client, bale):
         uniformity="82.0",
     )
 
-    with override_settings(
-        TASKS={
-            "default": {
-                "BACKEND": "django_tasks_db.DatabaseBackend",
-                "QUEUES": [
-                    "hvi_reports",
-                    "season_reports",
-                    "confirmations",
-                    "prices",
-                    "demo",
-                ],
-            }
-        }
-    ):
-        summarize_report.enqueue(report.id)
-        response = client.get(reverse("tasks_json"))
+    summarize_report.enqueue(report.id)
+    response = client.get(reverse("tasks_json"))
 
     body = response.json()
 
@@ -46,7 +31,7 @@ def test_tasks_json_lists_recent_tasks_per_queue(client, bale):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_tasks_json_exposes_the_failure_reason(client, bale):
+def test_tasks_json_exposes_the_failure_reason(client, bale, database_backend):
     report = HVIReport.objects.create(
         bale=bale,
         micronaire="2.00",
@@ -55,23 +40,9 @@ def test_tasks_json_exposes_the_failure_reason(client, bale):
         uniformity="82.0",
     )
 
-    with override_settings(
-        TASKS={
-            "default": {
-                "BACKEND": "django_tasks_db.DatabaseBackend",
-                "QUEUES": [
-                    "hvi_reports",
-                    "season_reports",
-                    "confirmations",
-                    "prices",
-                    "demo",
-                ],
-            }
-        }
-    ):
-        summarize_report.enqueue(report.id)
-        call_command("db_worker", queue_name="hvi_reports", batch=True, verbosity=0)
-        response = client.get(reverse("tasks_json"))
+    summarize_report.enqueue(report.id)
+    call_command("db_worker", queue_name="hvi_reports", batch=True, verbosity=0)
+    response = client.get(reverse("tasks_json"))
 
     body = response.json()
     task = body["tasks"][0]

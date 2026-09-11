@@ -8,11 +8,10 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.tasks import TaskResultStatus, default_task_backend
-from django.tasks.exceptions import TaskResultDoesNotExist
 from django.views.decorators.http import require_GET, require_POST
-from django_tasks_db.models import DBTaskResult
 
 from desk.models import Bale, Contract, HVIReport
+from desk.task_feed import TASK_RESULT_NOT_FOUND, clear_history, recent_tasks
 from desk.tasks import (
     confirm_contract,
     demo_task,
@@ -65,8 +64,9 @@ def task_status(request, task_id):
     """Checks the status of an already-enqueued task."""
     try:
         result = default_task_backend.get_result(task_id)
-    except (TaskResultDoesNotExist, ValueError):
-        # ValueError covers a task_id that isn't even a well-formed UUID.
+    except TASK_RESULT_NOT_FOUND:
+        # Covers an id that no longer exists and one that was never a
+        # well-formed UUID; the backend reports both the same way.
         return JsonResponse({"error": "unknown task id"}, status=404)
     result.refresh()
 
@@ -194,28 +194,13 @@ def upload_report_batch(request):
 @require_GET
 def tasks_json(request):
     """Lists the most recent tasks per queue, for the dashboard to consume via polling."""
-    tasks = DBTaskResult.objects.order_by("-enqueued_at")[:50]
-    data = [
-        {
-            "id": str(t.id),
-            "queue": t.queue_name,
-            "task": t.task_path.rsplit(".", 1)[-1],
-            "status": t.status,
-            "error": t.exception_class_path.rsplit(".", 1)[-1] or None,
-            "enqueued_at": t.enqueued_at.isoformat() if t.enqueued_at else None,
-            "started_at": t.started_at.isoformat() if t.started_at else None,
-            "finished_at": t.finished_at.isoformat() if t.finished_at else None,
-        }
-        for t in tasks
-    ]
-    return JsonResponse({"tasks": data})
+    return JsonResponse({"tasks": recent_tasks()})
 
 
 @require_POST
 def clear_tasks(request):
     """Removes the entire task history — demo shortcut to reset the dashboard."""
-    removed, _details = DBTaskResult.objects.all().delete()
-    return JsonResponse({"removed": removed})
+    return JsonResponse({"removed": clear_history()})
 
 
 @require_POST

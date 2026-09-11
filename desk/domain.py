@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from decimal import Decimal
 
 
 class InvalidHVIParameter(Exception):
@@ -21,26 +22,50 @@ class UniformityBelowMinimum(InvalidHVIParameter):
     """Raised when uniformity is below the commercial minimum."""
 
 
-MICRONAIRE_MIN = 3.5
-MICRONAIRE_MAX = 4.9
-LENGTH_MIN = 1.11  # inches (UHML)
-STRENGTH_MIN = 28.0  # gf/tex
-UNIFORMITY_MIN = 80.0  # %
+# Decimal, not float: these are instrument readings compared against
+# commercial thresholds, and a boundary reading must land on the same side
+# of the limit every time. Decimal("1.11") is exactly 1.11; the float 1.11
+# is a nearby binary approximation.
+MICRONAIRE_MIN = Decimal("3.5")
+MICRONAIRE_MAX = Decimal("4.9")
+LENGTH_MIN = Decimal("1.11")  # inches (UHML)
+STRENGTH_MIN = Decimal("28.0")  # gf/tex
+UNIFORMITY_MIN = Decimal("80.0")  # %
+
+
+def to_reading(value) -> Decimal:
+    """Normalizes a reading to Decimal, whatever the caller happens to hold.
+
+    Readings reach the domain as `Decimal` from the model fields and as
+    `str` from an uploaded CSV. A `float` goes through `str()` first, so
+    4.2 becomes Decimal("4.2") rather than the binary expansion that
+    Decimal(4.2) would produce.
+    """
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, float):
+        return Decimal(str(value))
+    return Decimal(value)
 
 
 @dataclass(frozen=True)
 class HVIParameters:
     """Classification parameters from an HVI (High Volume Instrument) report.
 
-    Pure domain object: does not depend on Django or a database.
+    Pure domain object: does not depend on Django or a database. Every
+    parameter is normalized to `Decimal` on construction, so the validation
+    below always compares exact decimal quantities.
     """
 
-    micronaire: float
-    length: float
-    strength: float
-    uniformity: float
+    micronaire: Decimal
+    length: Decimal
+    strength: Decimal
+    uniformity: Decimal
 
     def __post_init__(self) -> None:
+        for field in fields(self):
+            # object.__setattr__ because the dataclass is frozen.
+            object.__setattr__(self, field.name, to_reading(getattr(self, field.name)))
         self._validate_micronaire()
         self._validate_length()
         self._validate_strength()
