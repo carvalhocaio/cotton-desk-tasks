@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from desk.domain import HVIParameters, MicronaireOutOfRange
@@ -24,7 +26,20 @@ def test_valid_hvi_report_converts_to_hviparameters():
     parameters = report.to_domain()
 
     assert parameters == HVIParameters(
-        micronaire=4.2, length=1.16, strength=29.0, uniformity=82.0
+        micronaire=Decimal("4.20"),
+        length=Decimal("1.16"),
+        strength=Decimal("29.0"),
+        uniformity=Decimal("82.0"),
+    )
+    # Straight through from the model fields, no float in between.
+    assert all(
+        isinstance(value, Decimal)
+        for value in (
+            parameters.micronaire,
+            parameters.length,
+            parameters.strength,
+            parameters.uniformity,
+        )
     )
 
 
