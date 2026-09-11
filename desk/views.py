@@ -40,6 +40,15 @@ CSV_COLUMNS = (
 MAX_CSV_ROWS = 1000
 
 
+class BatchRejected(Exception):
+    """Batch-level refusal raised from inside the upload's transaction.
+
+    It has to be an exception, not an early return: returning out of a
+    `transaction.atomic()` block leaves it without an exception to roll back
+    on, so the rows written before the refusal would commit.
+    """
+
+
 def _bad_request(message):
     return JsonResponse({"error": message}, status=400)
 
@@ -145,7 +154,10 @@ def upload_report_batch(request):
             for row in reader:
                 line += 1
                 if len(report_ids) >= MAX_CSV_ROWS:
-                    return _bad_request(
+                    # Raise rather than return: returning out of an atomic
+                    # block exits it without an exception, which commits — the
+                    # rejected batch would be persisted and enqueued anyway.
+                    raise BatchRejected(
                         f"batch exceeds the {MAX_CSV_ROWS}-row limit — split the file"
                     )
                 bale, _bale_created = Bale.objects.get_or_create(
@@ -166,6 +178,8 @@ def upload_report_batch(request):
                 )
                 report_ids.append(report.id)
                 transaction.on_commit(partial(summarize_report_task.enqueue, report.id))
+    except BatchRejected as exc:
+        return _bad_request(str(exc))
     except (ValidationError, InvalidOperation, ValueError, TypeError) as exc:
         # A row whose values don't fit the model fields (a non-numeric
         # micronaire, an unparseable date). The atomic block already rolled the

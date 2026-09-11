@@ -3,6 +3,7 @@ import io
 import pytest
 from django.urls import reverse
 
+from desk import views
 from desk.models import Bale, HVIReport
 
 HEADER = (
@@ -58,6 +59,34 @@ def test_upload_batch_with_missing_column_returns_400_naming_it(client):
     assert response.status_code == 400
     assert "micronaire" in response.json()["error"]
     assert not Bale.objects.exists()
+
+
+@pytest.mark.django_db
+def test_upload_batch_over_the_row_cap_persists_nothing(
+    client, monkeypatch, django_capture_on_commit_callbacks
+):
+    """The cap has to roll back like any other refusal.
+
+    Returning early from inside transaction.atomic() exits the block with no
+    exception, which commits — so a rejected batch would answer 400 and still
+    persist every row it had written up to the limit.
+    """
+    monkeypatch.setattr(views, "MAX_CSV_ROWS", 2)
+    content = HEADER + "".join(
+        f"BR202600{i:04d},2025/2026,Farm,218.00,2026-04-20,4.20,1.16,29.0,82.0\n"
+        for i in range(3)
+    )
+
+    with django_capture_on_commit_callbacks() as callbacks:
+        response = client.post(
+            reverse("upload_report_batch"), {"file": csv_file(content)}
+        )
+
+    assert response.status_code == 400
+    assert "row limit" in response.json()["error"]
+    assert not Bale.objects.exists()
+    assert not HVIReport.objects.exists()
+    assert callbacks == []
 
 
 @pytest.mark.django_db
