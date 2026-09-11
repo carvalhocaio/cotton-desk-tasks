@@ -5,6 +5,22 @@ from django.test import override_settings
 from desk.models import Bale
 
 
+def _backend(dotted_path):
+    """override_settings for one backend, reusing the real queue list.
+
+    Reading QUEUES from settings means adding a queue there doesn't leave
+    the tests running against a stale copy of the list.
+    """
+    return override_settings(
+        TASKS={
+            "default": {
+                "BACKEND": dotted_path,
+                "QUEUES": settings.TASKS["default"]["QUEUES"],
+            }
+        }
+    )
+
+
 @pytest.fixture(autouse=True)
 def task_immediate_backend():
     """Forces the ImmediateBackend during tests.
@@ -15,18 +31,22 @@ def task_immediate_backend():
     why the suite runs tasks inline, regardless of the production
     backend.
 
-    Only the backend is swapped: the queue list is read from the real
-    settings so adding a queue there doesn't silently leave the tests
-    running against a stale copy.
+    Tests that do need stored rows take the `database_backend` fixture,
+    which overrides this one.
     """
-    with override_settings(
-        TASKS={
-            "default": {
-                "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
-                "QUEUES": settings.TASKS["default"]["QUEUES"],
-            }
-        }
-    ):
+    with _backend("django.tasks.backends.immediate.ImmediateBackend"):
+        yield
+
+
+@pytest.fixture
+def database_backend():
+    """Swaps the DatabaseBackend in, overriding the autouse fixture above.
+
+    Running tasks inline never writes a TaskResult row, so anything that
+    asserts on stored state — the dashboard feed, a real worker run,
+    checking a task's status by id — needs the real backend instead.
+    """
+    with _backend("django_tasks_db.DatabaseBackend"):
         yield
 
 
