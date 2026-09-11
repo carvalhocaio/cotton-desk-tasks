@@ -1,10 +1,16 @@
-.PHONY: help install migrate run worker test lint lint-fix format format-check audit ci clean
+.PHONY: help install hooks hooks-run migrate run worker test lint lint-fix format format-check audit ci clean
 
 help: ## Lists the available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 install: ## Installs the project dependencies (including dev)
 	uv sync
+
+hooks: ## Installs the pre-commit hooks into .git/hooks
+	uv run pre-commit install
+
+hooks-run: ## Runs every pre-commit hook against the whole repository
+	uv run pre-commit run --all-files
 
 migrate: ## Applies the Django migrations
 	uv run python manage.py migrate
@@ -13,7 +19,10 @@ run: ## Runs the development server
 	uv run python manage.py runserver
 
 worker: ## Runs the worker that processes the task queues
-	uv run python manage.py db_worker
+	# --queue-name '*': db_worker defaults to a queue literally named "default",
+	# and this project has none — without the flag it idles while every task
+	# sits in READY forever.
+	uv run python manage.py db_worker --queue-name '*'
 
 test: ## Runs the test suite
 	uv run pytest
