@@ -61,6 +61,7 @@
         <code class="font-mono text-xs bg-kraft px-1.5 py-0.5 rounded">code,season,producer,weight_kg,classification_date,micronaire,length,strength,uniformity</code>
       </p>
       <form id="form-upload" class="flex flex-wrap items-center gap-3">
+        {% csrf_token %}
         <input type="file" name="file" id="input-file" accept=".csv" required
           class="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-sm file:border-0 file:bg-denim file:text-paper file:font-medium file:cursor-pointer hover:file:bg-denim/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta rounded-sm">
         <button type="submit"
@@ -111,6 +112,15 @@
   </main>
 
   <script>
+    // The POST endpoints are CSRF-protected. The token comes from the
+    // {% templatetag openblock %} csrf_token {% templatetag closeblock %} hidden
+    // input rendered inside #form-upload, and rides along as a header so the
+    // JSON endpoints don't need a form body.
+    function postHeaders() {
+      const field = document.querySelector("[name=csrfmiddlewaretoken]");
+      return { "X-CSRFToken": field ? field.value : "" };
+    }
+
     const QUEUES = [
       { name: "hvi_reports", label: "HVI Reports", description: "report summary · high priority" },
       { name: "confirmations", label: "Contract Confirmations", description: "closing and AI extraction" },
@@ -235,7 +245,9 @@
       msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-denim";
 
       try {
-        const response = await fetch("/reports/upload-batch/", { method: "POST", body: formData });
+        // No Content-Type here on purpose: the browser has to set the
+        // multipart boundary itself.
+        const response = await fetch("/reports/upload-batch/", { method: "POST", headers: postHeaders(), body: formData });
         const body = await response.json();
         if (!response.ok) throw new Error("upload failed");
         msg.textContent = `${body.created} report(s) enqueued — watch the "HVI Reports" lane below.`;
@@ -253,7 +265,7 @@
         msg.textContent = "triggering...";
         msg.className = "mt-3 text-sm font-mono min-h-[1.25rem] text-denim";
         try {
-          const response = await fetch(button.dataset.action, { method: "POST" });
+          const response = await fetch(button.dataset.action, { method: "POST", headers: postHeaders() });
           const body = await response.json();
           if (!response.ok) {
             msg.textContent = body.error ?? "couldn't trigger that action.";
@@ -289,7 +301,7 @@
 
     document.getElementById("btn-clear").addEventListener("click", async () => {
       if (!confirm("Delete the entire task history from the dashboard?")) return;
-      await fetch("/dashboard/clear/", { method: "POST" });
+      await fetch("/dashboard/clear/", { method: "POST", headers: postHeaders() });
       await refresh();
     });
 

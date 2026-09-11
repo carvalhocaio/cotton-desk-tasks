@@ -10,22 +10,43 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Loaded here, not in desk/extraction.py: settings is the configuration entry
+# point, so every process (runserver, db_worker, pytest, management commands)
+# sees the .env regardless of which modules it happens to import.
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
+# Defaults to on so the demo runs with no configuration at all; set
+# DJANGO_DEBUG=False to turn it off.
+DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() not in ("false", "0", "no")
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-nfgyi8h$i1p(&t3sksws%=c^-qd2m6ob+&mc!rl+avn#olgb1*"
+DEV_SECRET_KEY = "django-insecure-dev-only-do-not-use-outside-local-development"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", DEV_SECRET_KEY)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+if not DEBUG and SECRET_KEY == DEV_SECRET_KEY:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set when DEBUG is off — the development "
+        "fallback is public, it lives in version control."
+    )
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if host.strip()
+]
 
 
 # Application definition
