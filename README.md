@@ -12,6 +12,14 @@ study project for the framework — covering HVI report summaries, season
 reports, contract confirmation, and structured data extraction via
 [PydanticAI](https://ai.pydantic.dev/) + Gemini.
 
+![The dashboard processing a batch of HVI reports: four cards enter the queue as "ready", three complete, and one fails with MicronaireOutOfRange; a contract confirmation then lands in its own lane.](docs/dashboard.gif)
+
+Uploading a manifest enqueues one summary per row. The cards move through
+`READY` → `RUNNING` → `SUCCESSFUL`/`FAILED` on their own, and a report
+outside the commercial range surfaces as a real failure with the reason
+attached — the last bale in the batch has a micronaire of 2.80, below the
+3.5 minimum.
+
 ## Table of Contents
 
 - [Scenario](#scenario)
