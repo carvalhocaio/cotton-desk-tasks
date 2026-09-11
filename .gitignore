@@ -15,5 +15,9 @@ wheels/
 # environments
 .env
 
+# tool caches
+.ruff_cache/
+.pytest_cache/
+
 # others
 .idea/

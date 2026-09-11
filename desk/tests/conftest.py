@@ -1,4 +1,5 @@
 import pytest
+from django.conf import settings
 from django.test import override_settings
 
 from desk.models import Bale
@@ -13,18 +14,16 @@ def task_immediate_backend():
     shouldn't depend on an external worker running in parallel - that's
     why the suite runs tasks inline, regardless of the production
     backend.
+
+    Only the backend is swapped: the queue list is read from the real
+    settings so adding a queue there doesn't silently leave the tests
+    running against a stale copy.
     """
     with override_settings(
         TASKS={
             "default": {
                 "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
-                "QUEUES": [
-                    "hvi_reports",
-                    "season_reports",
-                    "confirmations",
-                    "prices",
-                    "demo",
-                ],
+                "QUEUES": settings.TASKS["default"]["QUEUES"],
             }
         }
     ):

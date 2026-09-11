@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.tasks import TaskResultStatus
+from django.tasks.exceptions import TaskResultDoesNotExist
 from django.urls import reverse
 
 from desk.models import HVIReport
@@ -46,3 +47,13 @@ def test_get_task_status_with_invalid_report_returns_failed(client):
     assert response.status_code == 422
     assert body["status"] == "failed"
     assert "MicronaireOutOfRange" in body["error"]
+
+
+def test_get_task_status_with_unknown_id_returns_404(client):
+    with patch(
+        "desk.views.default_task_backend.get_result",
+        side_effect=TaskResultDoesNotExist,
+    ):
+        response = client.get(reverse("task_status", args=["any-id"]))
+
+    assert response.status_code == 404

@@ -10,7 +10,9 @@ from desk.tasks import extract_confirmation
 
 
 @pytest.mark.django_db
-def test_extract_confirmation_creates_contract_and_schedules_confirmation(bale):
+def test_extract_confirmation_creates_contract_and_schedules_confirmation(
+    bale, django_capture_on_commit_callbacks
+):
     fake_data = ConfirmationData(
         bale_code=bale.code,
         buyer="Boa Vista Textile",
@@ -18,9 +20,12 @@ def test_extract_confirmation_creates_contract_and_schedules_confirmation(bale):
     )
     confirm_contract_mock = MagicMock()
 
+    # The confirmation is scheduled with transaction.on_commit, so the callback
+    # has to be run explicitly for the assertion below to see it.
     with (
         patch("desk.tasks.extract_confirmation_data", return_value=fake_data),
         patch("desk.tasks.confirm_contract", confirm_contract_mock),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         result = extract_confirmation.enqueue("any text")
 

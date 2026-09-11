@@ -1,6 +1,8 @@
 import time
 from decimal import Decimal
+from functools import partial
 
+from django.db import transaction
 from django.tasks import task
 
 from desk.domain import InvalidHVIParameter
@@ -11,7 +13,7 @@ from desk.models import Bale, Contract, HVIReport, PriceIndex
 @task(queue_name="hvi_reports", priority=50)
 def summarize_report(report_id: int) -> str:
     """Summarizes an HVI report from its validated domain parameters."""
-    report = HVIReport.objects.get(pk=report_id)
+    report = HVIReport.objects.select_related("bale").get(pk=report_id)
     parameters = report.to_domain()
     return (
         f"Bale {report.bale.code}: micronaire {parameters.micronaire}, "
@@ -73,12 +75,15 @@ def extract_confirmation(text: str) -> str:
     """
     data = extract_confirmation_data(text)
     bale = Bale.objects.get(code=data.bale_code)
-    contract = Contract.objects.create(
-        bale=bale,
-        buyer=data.buyer,
-        price_per_kg=Decimal(data.price_per_kg),
-    )
-    confirm_contract.enqueue(contract.id)
+    with transaction.atomic():
+        contract = Contract.objects.create(
+            bale=bale,
+            buyer=data.buyer,
+            price_per_kg=Decimal(data.price_per_kg),
+        )
+        # Same reason as `_close_contract` in views.py: the confirmation worker
+        # must not look for a contract the database hasn't committed yet.
+        transaction.on_commit(partial(confirm_contract.enqueue, contract.id))
     return f"Contract {contract.id} created: bale {bale.code}, buyer {contract.buyer}"
 
 

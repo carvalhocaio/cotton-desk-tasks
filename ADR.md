@@ -92,6 +92,7 @@ and reconciles the cards on screen.
 - **Constant requests even with an idle dashboard.** One query every 1.5s per open tab, regardless of whether there's work in the queue.
 - **Doesn't scale to many simultaneous users.** Each open browser generates a scan of the 50 most recent tasks every cycle. For a local demo dashboard this is irrelevant; for an operational desk dashboard with several operators, it wouldn't be.
 - **The `db_worker`'s `--interval` flag affects what you see.** Increasing it makes tasks stay longer in `READY` (visible), but doesn't change the execution duration itself - an empirical finding worth recording for anyone reproducing the demo.
+- **The polling endpoint reads a third-party model directly.** `tasks_json` queries `django_tasks_db.models.DBTaskResult`, which is the package's storage model, not a public API - the Tasks Framework exposes `TaskResult` per task id, with no "list the last N across every queue" equivalent. It's the pragmatic choice for a dashboard, but it means a schema change in `django-tasks-db` breaks the view, and the field names (`task_path`, `exception_class_path`, `enqueued_at`) leak into the JSON contract. Worth an adapter function if the dashboard grows.
 
 ## Trigger for review
 If the dashboard stops being a demo and becomes an operational tool with
