@@ -1,18 +1,26 @@
 [project]
 name = "cotton-desk-tasks"
 version = "0.1.0"
-description = "Add your description here"
+description = "Operational dashboard for a cotton trading desk, built on Django's native Task Framework"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "django>=6.0,<7.0",
     "django-tasks-db>=0.12.0",
-    "pydantic-ai>=2.14.1",
+    # The slim distribution plus only the Google extra: the project uses
+    # `google:gemini-2.5-flash` and nothing else. The `pydantic-ai` meta-package
+    # would also pull in the openai, anthropic, logfire and mcp extras, none of
+    # which this code touches.
+    "pydantic-ai-slim[google]>=2.14.1",
+    # Imported directly by config/settings.py. It used to arrive only as a
+    # transitive of the mcp extra, which made it an undeclared dependency.
+    "python-dotenv>=1.0.0",
 ]
 
 [dependency-groups]
 dev = [
     "pip-audit>=2.10.1",
+    "pre-commit>=4.0.0",
     "pytest>=9.1.1",
     "pytest-django>=4.12.0",
     "ruff>=0.15.22",
